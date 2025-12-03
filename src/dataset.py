@@ -10,7 +10,7 @@ class BRD4Dataset(InMemoryDataset):
     def __init__(self, root, df=None, transform=None, pre_transform=None):
         self.df = df
         super(BRD4Dataset, self).__init__(root, transform, pre_transform)
-        self.data, self.slices = torch.load(self.processed_paths[0])
+        self.data, self.slices = torch.load(self.processed_paths[0], weights_only=False)
 
     @property
     def raw_file_names(self):

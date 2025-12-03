@@ -85,12 +85,17 @@ def clean_and_label_data(df):
         if col not in df.columns:
             df[col] = np.nan
             
-    df['Ki_val'] = df[ki_col].apply(parse_activity)
-    df['Kd_val'] = df[kd_col].apply(parse_activity)
-    df['IC50_val'] = df[ic50_col].apply(parse_activity)
+    # Create new columns in a separate dataframe to avoid fragmentation
+    new_cols = pd.DataFrame(index=df.index)
+    new_cols['Ki_val'] = df[ki_col].apply(parse_activity)
+    new_cols['Kd_val'] = df[kd_col].apply(parse_activity)
+    new_cols['IC50_val'] = df[ic50_col].apply(parse_activity)
     
     # Coalesce
-    df['Activity_nM'] = df['Ki_val'].fillna(df['Kd_val']).fillna(df['IC50_val'])
+    new_cols['Activity_nM'] = new_cols['Ki_val'].fillna(new_cols['Kd_val']).fillna(new_cols['IC50_val'])
+    
+    # Concatenate back
+    df = pd.concat([df, new_cols], axis=1)
     
     # Drop rows with no activity
     df = df.dropna(subset=['Activity_nM'])
