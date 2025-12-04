@@ -40,7 +40,7 @@ def evaluate(model, loader, device):
     metrics = calculate_metrics(np.array(y_true), np.array(y_pred_logits))
     return metrics, np.array(y_true), np.array(y_pred_logits)
 
-def run_training(train_dataset, val_dataset, test_dataset, config=None):
+def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fold_idx=None):
     # Config overrides
     hidden_dim = config.get('hidden_dim', GAT_HIDDEN_DIM) if config else GAT_HIDDEN_DIM
     heads = config.get('heads', GAT_HEADS) if config else GAT_HEADS
@@ -49,12 +49,15 @@ def run_training(train_dataset, val_dataset, test_dataset, config=None):
     lr = config.get('lr', LEARNING_RATE) if config else LEARNING_RATE
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"Using device: {device}")
+    if fold_idx is not None:
+        print(f"Using device: {device} for Fold {fold_idx}")
+    else:
+        print(f"Using device: {device}")
     
     # DataLoaders
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
-    test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False) if test_dataset else None
     
     # Model
     # Get num features from first data object
@@ -81,6 +84,9 @@ def run_training(train_dataset, val_dataset, test_dataset, config=None):
     train_losses = []
     val_aps = []
     
+    save_prefix = f"fold_{fold_idx}_" if fold_idx is not None else ""
+    model_save_name = f"{save_prefix}best_model.pth"
+    
     for epoch in range(1, EPOCHS + 1):
         loss = train_epoch(model, train_loader, optimizer, criterion, device)
         val_metrics, _, _ = evaluate(model, val_loader, device)
@@ -95,7 +101,7 @@ def run_training(train_dataset, val_dataset, test_dataset, config=None):
         if val_ap > best_val_ap:
             best_val_ap = val_ap
             patience_counter = 0
-            torch.save(model.state_dict(), os.path.join(MODEL_SAVE_DIR, 'best_model.pth'))
+            torch.save(model.state_dict(), os.path.join(MODEL_SAVE_DIR, model_save_name))
         else:
             patience_counter += 1
             
@@ -104,15 +110,20 @@ def run_training(train_dataset, val_dataset, test_dataset, config=None):
             break
             
     # Final Evaluation
-    print("Loading best model for final evaluation...")
-    model.load_state_dict(torch.load(os.path.join(MODEL_SAVE_DIR, 'best_model.pth')))
+    print(f"Loading best model for final evaluation ({model_save_name})...")
+    model.load_state_dict(torch.load(os.path.join(MODEL_SAVE_DIR, model_save_name)))
     
-    test_metrics, y_true_test, y_pred_test = evaluate(model, test_loader, device)
-    print(f"Test Metrics: {test_metrics}")
+    # If test dataset is provided, evaluate on it. Otherwise evaluate on Val set (for CV)
+    eval_loader = test_loader if test_loader else val_loader
+    eval_name = "Test" if test_loader else "Validation"
+    
+    test_metrics, y_true_test, y_pred_test = evaluate(model, eval_loader, device)
+    print(f"{eval_name} Metrics: {test_metrics}")
     
     # Plots
-    plot_training_curves(train_losses, val_aps, os.path.join(BASE_DIR, 'training_curves.png'))
-    plot_confusion_matrix(y_true_test, y_pred_test, os.path.join(BASE_DIR, 'confusion_matrix.png'))
-    plot_roc_curve(y_true_test, y_pred_test, os.path.join(BASE_DIR, 'roc_curve.png'))
-    plot_pr_curve(y_true_test, y_pred_test, os.path.join(BASE_DIR, 'pr_curve.png'))    
+    plot_training_curves(train_losses, val_aps, os.path.join(BASE_DIR, f'{save_prefix}training_curves.png'))
+    plot_confusion_matrix(y_true_test, y_pred_test, os.path.join(BASE_DIR, f'{save_prefix}confusion_matrix.png'))
+    plot_roc_curve(y_true_test, y_pred_test, os.path.join(BASE_DIR, f'{save_prefix}roc_curve.png'))
+    plot_pr_curve(y_true_test, y_pred_test, os.path.join(BASE_DIR, f'{save_prefix}pr_curve.png'))
+    
     return test_metrics

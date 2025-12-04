@@ -89,3 +89,42 @@ def scaffold_split(dataset, frac_train=0.8, frac_val=0.1, frac_test=0.1, seed=42
             test_idxs.extend(scaffold_set)
             
     return dataset[train_idxs], dataset[val_idxs], dataset[test_idxs]
+
+def scaffold_k_fold(dataset, k=5, seed=42):
+    """
+    Splits the dataset into K folds based on scaffolds.
+    Returns a list of (train_dataset, val_dataset) tuples.
+    """
+    np.random.seed(seed)
+    
+    scaffolds = defaultdict(list)
+    for idx, data in enumerate(dataset):
+        scaffold = generate_scaffold(data.smiles)
+        scaffolds[scaffold].append(idx)
+        
+    scaffold_sets = list(scaffolds.values())
+    np.random.shuffle(scaffold_sets)
+    
+    folds = [[] for _ in range(k)]
+    
+    # Distribute scaffolds to folds to ensure roughly equal size
+    # A simple greedy approach: add next scaffold to the smallest fold
+    for scaffold_set in scaffold_sets:
+        # Find fold with minimum number of samples
+        min_fold_idx = np.argmin([len(fold) for fold in folds])
+        folds[min_fold_idx].extend(scaffold_set)
+        
+    # Create Train/Val splits for each fold
+    # Fold i is Val, rest are Train
+    k_fold_datasets = []
+    
+    for i in range(k):
+        val_idxs = folds[i]
+        train_idxs = []
+        for j in range(k):
+            if i != j:
+                train_idxs.extend(folds[j])
+                
+        k_fold_datasets.append((dataset[train_idxs], dataset[val_idxs]))
+        
+    return k_fold_datasets
