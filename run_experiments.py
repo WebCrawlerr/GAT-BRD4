@@ -111,7 +111,7 @@ def run_ablation_study(dataset):
     val_loader = torch_geometric.loader.DataLoader(val_dataset, batch_size=BATCH_SIZE)
     
     for epoch in range(1, EPOCHS + 1):
-        loss = train_epoch(model, train_loader, criterion, optimizer, device)
+        loss = train_epoch(model, train_loader, optimizer, criterion, device)
         val_metrics = evaluate(model, val_loader, device)
         
         if val_metrics['AP'] > best_val_ap:
