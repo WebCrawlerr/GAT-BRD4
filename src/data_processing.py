@@ -113,6 +113,17 @@ def clean_and_label_data(df):
     
     df['Label'] = (df['Activity_nM'] <= THRESHOLD_NM).astype(int)
     
+    # Calculate and print statistics
+    total_molecules = len(df)
+    active_molecules = df['Label'].sum()
+    active_percentage = (active_molecules / total_molecules) * 100 if total_molecules > 0 else 0
+    
+    print(f"\n--- Data Statistics ---")
+    print(f"Total Molecules: {total_molecules}")
+    print(f"Active Molecules (Label=1): {active_molecules}")
+    print(f"Active Percentage: {active_percentage:.2f}%")
+    print(f"-----------------------\n")
+    
     # Optional: Remove grey zone? User mentioned it as optional.
     # Let's keep it simple for now, or maybe add a flag.
     

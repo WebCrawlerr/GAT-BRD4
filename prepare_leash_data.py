@@ -22,7 +22,13 @@ def process_leash_data(input_file, output_dir, output_filename, target_protein, 
     total_processed = 0
     saved_rows = 0
     positives_saved = 0
+    saved_rows = 0
+    positives_saved = 0
     negatives_saved = 0
+    
+    # Statistics counters (before downsampling)
+    total_positives_seen = 0
+    total_negatives_seen = 0
     
     # Set seed for reproducibility
     np.random.seed(seed)
@@ -58,8 +64,15 @@ def process_leash_data(input_file, output_dir, output_filename, target_protein, 
                     # Update counters
                     positives_saved += len(positives)
                     negatives_saved += len(negatives)
+                    
+                    # Update global stats
+                    total_positives_seen += len(positives)
+                    total_negatives_seen += len(negatives)
                 else:
                     chunk_to_save = chunk_filtered
+                    # If no 'binds' column, we can't count positives/negatives easily without assuming structure
+                    # But Leash data usually has 'binds'
+
                 
                 # Shuffle chunk to mix positives and negatives
                 chunk_to_save = chunk_to_save.sample(frac=1, random_state=seed).reset_index(drop=True)
@@ -87,6 +100,18 @@ def process_leash_data(input_file, output_dir, output_filename, target_protein, 
     print(f"Positives saved: {positives_saved}")
     print(f"Negatives saved: {negatives_saved}")
     print(f"Output saved to: {output_path}")
+    
+    # Print Statistics
+    total_seen = total_positives_seen + total_negatives_seen
+    if total_seen > 0:
+        active_percentage = (total_positives_seen / total_seen) * 100
+        print(f"\n--- Data Statistics (Before Downsampling) ---")
+        print(f"Total Molecules (Matching {target_protein}): {total_seen}")
+        print(f"Total Active Molecules: {total_positives_seen}")
+        print(f"Active Percentage: {active_percentage:.4f}%")
+        print(f"---------------------------------------------")
+    else:
+        print("\nNo matching data found to calculate statistics.")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Filter and prepare Leash-BELKA dataset.")
