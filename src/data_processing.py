@@ -113,15 +113,25 @@ def clean_and_label_data(df):
     
     df['Label'] = (df['Activity_nM'] <= THRESHOLD_NM).astype(int)
     
-    # Calculate and print statistics
+    # Calculate statistics
     total_molecules = len(df)
     active_molecules = df['Label'].sum()
     active_percentage = (active_molecules / total_molecules) * 100 if total_molecules > 0 else 0
-    
+
+    # Calculate source counts (Exclusive based on priority Ki > Kd > IC50)
+    # Note: df at this point contains the parsed _val columns
+    source_ki = df['Ki_val'].notna().sum()
+    source_kd = (df['Ki_val'].isna() & df['Kd_val'].notna()).sum()
+    source_ic50 = (df['Ki_val'].isna() & df['Kd_val'].isna() & df['IC50_val'].notna()).sum()
+
     print(f"\n--- Data Statistics ---")
     print(f"Total Molecules: {total_molecules}")
     print(f"Active Molecules (Label=1): {active_molecules}")
     print(f"Active Percentage: {active_percentage:.2f}%")
+    print(f"--- Data Sources (Priority: Ki > Kd > IC50) ---")
+    print(f"Defined by Ki:   {source_ki} ({source_ki/total_molecules*100:.1f}%)")
+    print(f"Defined by Kd:   {source_kd} ({source_kd/total_molecules*100:.1f}%)")
+    print(f"Defined by IC50: {source_ic50} ({source_ic50/total_molecules*100:.1f}%)")
     print(f"-----------------------\n")
     
     # Optional: Remove grey zone? User mentioned it as optional.
