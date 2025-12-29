@@ -7,6 +7,22 @@ from src.features import smiles_to_graph
 from tqdm import tqdm
 
 class BRD4Dataset(InMemoryDataset):
+    """
+    PyTorch Geometric Dataset for BRD4 binding affinity prediction.
+    
+    This dataset loads processed graph data from a .pt file. If the .pt file
+    does not exist, it processes a pandas DataFrame containing SMILES strings
+    and labels, converting them into graph objects suitable for GNNs.
+    
+    Args:
+        root (str): Root directory where the dataset should be saved.
+        df (pd.DataFrame, optional): DataFrame containing 'Ligand SMILES' and 'Label' columns.
+                                     Required for 'process' step if data is not already cached.
+        transform (callable, optional): A function/transform that takes in an
+            torch_geometric.data.Data object and returns a transformed version.
+        pre_transform (callable, optional): A function/transform that takes in
+            an torch_geometric.data.Data object and returns a transformed version.
+    """
     def __init__(self, root, df=None, transform=None, pre_transform=None):
         self.df = df
         super(BRD4Dataset, self).__init__(root, transform, pre_transform)

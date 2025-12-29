@@ -4,139 +4,86 @@ import numpy as np
 import argparse
 from tqdm import tqdm
 
-def process_leash_data(input_file, output_dir, output_filename, target_protein, negative_rate, seed, chunk_size):
-    print(f"Starting processing...")
-    print(f"Input File: {input_file}")
-    print(f"Output Directory: {output_dir}")
-    print(f"Target Protein: {target_protein}")
-    print(f"Negative Sample Rate: {negative_rate}")
+def prepare_training_data(input_file, output_file, seed, chunk_size):
+    print(f"--- Preparing Training Data ---")
+    print(f"Input: {input_file}")
+    print(f"Output: {output_file}")
     
     if not os.path.exists(input_file):
-        print(f"ERROR: Input file not found at {input_file}")
+        print(f"ERROR: Input file not found: {input_file}")
         return
 
-    output_path = os.path.join(output_dir, output_filename)
-    os.makedirs(output_dir, exist_ok=True)
+    # Ensure output dir exists
+    os.makedirs(os.path.dirname(os.path.abspath(output_file)), exist_ok=True)
     
-    # Initialize counters
     total_processed = 0
-    saved_rows = 0
-    positives_saved = 0
-    saved_rows = 0
-    positives_saved = 0
-    negatives_saved = 0
     
-    # Statistics counters (before downsampling)
-    total_positives_seen = 0
-    total_negatives_seen = 0
-    
-    # Set seed for reproducibility
+    # Set seed
     np.random.seed(seed)
     
     first_chunk = True
     
-    # Process in chunks
+    # Process in chunks to handle memory if intermediate file is huge
     try:
         with pd.read_csv(input_file, chunksize=chunk_size) as reader:
-            for chunk in tqdm(reader, desc="Processing chunks"):
-                # Filter by protein
-                if 'protein_name' in chunk.columns:
-                    chunk_filtered = chunk[chunk['protein_name'] == target_protein].copy()
-                else:
-                    print("Warning: 'protein_name' column not found. Skipping filtering by protein.")
-                    chunk_filtered = chunk.copy()
+            for chunk in tqdm(reader, desc="Formatting and Shuffling"):
                 
-                if chunk_filtered.empty:
+                # Check columns and Rename
+                # We expect: molecule_smiles -> Ligand SMILES
+                #            binds -> Label
+                
+                # Check if it was already renamed or needs renaming
+                if 'molecule_smiles' in chunk.columns:
+                    chunk.rename(columns={'molecule_smiles': 'Ligand SMILES'}, inplace=True)
+                if 'binds' in chunk.columns:
+                    chunk.rename(columns={'binds': 'Label'}, inplace=True)
+                
+                # Standardize columns? 
+                # Ensure we have Ligand SMILES and Label
+                if 'Ligand SMILES' not in chunk.columns or 'Label' not in chunk.columns:
+                    print(f"Warning: standard columns not found in chunk. Columns: {chunk.columns}")
                     continue
                 
-                # Separate positives and negatives
-                if 'binds' in chunk_filtered.columns:
-                    positives = chunk_filtered[chunk_filtered['binds'] == 1]
-                    negatives = chunk_filtered[chunk_filtered['binds'] == 0]
-                    
-                    # Sample negatives
-                    if negative_rate < 1.0:
-                        negatives = negatives.sample(frac=negative_rate, random_state=seed)
-                    
-                    # Combine
-                    chunk_to_save = pd.concat([positives, negatives])
-                    
-                    # Update counters
-                    positives_saved += len(positives)
-                    negatives_saved += len(negatives)
-                    
-                    # Update global stats
-                    total_positives_seen += len(positives)
-                    total_negatives_seen += len(negatives)
-                else:
-                    chunk_to_save = chunk_filtered
-                    # If no 'binds' column, we can't count positives/negatives easily without assuming structure
-                    # But Leash data usually has 'binds'
-
+                # Keeping all data (NO UNDERSAMPLING)
+                chunk_to_save = chunk
                 
-                # Shuffle chunk to mix positives and negatives
+                # Shuffle within chunk? 
+                # ideally we want global shuffle. 
+                # With huge data, global shuffle is hard without loading all. 
+                # We can shuffle chunk here, and assume the input was random or valid enough.
+                # Or better: We can add a random index column, save all, then sort by it? 
+                # For now, local shuffle is better than nothing.
                 chunk_to_save = chunk_to_save.sample(frac=1, random_state=seed).reset_index(drop=True)
                 
-                # Save to CSV
+                # Save
                 mode = 'w' if first_chunk else 'a'
                 header = first_chunk
-                chunk_to_save.to_csv(output_path, mode=mode, header=header, index=False)
+                chunk_to_save.to_csv(output_file, mode=mode, header=header, index=False)
                 
-                saved_rows += len(chunk_to_save)
-                total_processed += len(chunk)
+                total_processed += len(chunk_to_save)
                 first_chunk = False
                 
-    except PermissionError:
-        print(f"\nERROR: Permission denied accessing {input_file}.")
-        print("Please ensure the file is not open in another program.")
-        return
     except Exception as e:
-        print(f"\nAn error occurred: {e}")
+        print(f"Error during preparation: {e}")
         return
 
-    print("\nProcessing Complete!")
-    print(f"Total rows processed: {total_processed}")
-    print(f"Rows saved: {saved_rows}")
-    print(f"Positives saved: {positives_saved}")
-    print(f"Negatives saved: {negatives_saved}")
-    print(f"Output saved to: {output_path}")
-    
-    # Print Statistics
-    total_seen = total_positives_seen + total_negatives_seen
-    if total_seen > 0:
-        active_percentage = (total_positives_seen / total_seen) * 100
-        print(f"\n--- Data Statistics (Before Downsampling) ---")
-        print(f"Total Molecules (Matching {target_protein}): {total_seen}")
-        print(f"Total Active Molecules: {total_positives_seen}")
-        print(f"Active Percentage: {active_percentage:.4f}%")
-        print(f"---------------------------------------------")
-    else:
-        print("\nNo matching data found to calculate statistics.")
+    print(f"Preparation Complete!")
+    print(f"Total records ready: {total_processed}")
+    print(f"Saved to: {output_file}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Filter and prepare Leash-BELKA dataset.")
+    parser = argparse.ArgumentParser(description="Prepare Leash-BELKA data for training (Format & Shuffle, No Sampling).")
     
-    # Paths
-    parser.add_argument('--input_file', type=str, default=r'data/raw/leash-BELKA/train.csv', help='Path to input CSV file')
-    parser.add_argument('--output_dir', type=str, default=r'data/processed', help='Directory to save output')
-    parser.add_argument('--output_filename', type=str, default='leash_brd4_filtered.csv', help='Output filename')
-    
-    # Filtering
-    parser.add_argument('--protein', type=str, default='BRD4', help='Target protein name (BRD4, HSA, sEH)')
-    parser.add_argument('--negative_rate', type=float, default=0.05, help='Fraction of negative samples to keep')
-    
-    # Misc
-    parser.add_argument('--seed', type=int, default=42, help='Random seed')
-    parser.add_argument('--chunk_size', type=int, default=1_000_000, help='Chunk size for processing')
+    parser.add_argument('--input_file', type=str, default=r'data/intermediate/brd4_all.csv', help='Path to filtered CSV')
+    parser.add_argument('--output_file', type=str, default=r'data/processed/leash_brd4_final.csv', help='Path to final CSV')
+    parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--chunk_size', type=int, default=1_000_000)
     
     args = parser.parse_args()
     
-    process_leash_data(
+    prepare_training_data(
         input_file=args.input_file,
-        output_dir=args.output_dir,
-        output_filename=args.output_filename,
-        target_protein=args.protein,
-        negative_rate=args.negative_rate,
+        output_file=args.output_file,
         seed=args.seed,
         chunk_size=args.chunk_size
     )

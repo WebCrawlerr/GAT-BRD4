@@ -3,7 +3,21 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_auc_score, average_precision_score, f1_score, confusion_matrix, roc_curve, fbeta_score
 import seaborn as sns
-import os
+import random
+
+def set_seed(seed):
+    """
+    Set random seed for reproducibility.
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        # Ensure deterministic behavior
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
 def calculate_metrics(y_true, y_pred_logits):
     """

@@ -7,11 +7,18 @@ from src.config import *
 from src.data_processing import load_and_filter_data, clean_and_label_data
 from src.dataset import BRD4Dataset, scaffold_split
 from src.train import run_training
+from src.dataset import BRD4Dataset, scaffold_split
+from src.train import run_training
+
+from src.utils import calculate_metrics, plot_loss_curve, plot_val_ap_curve, plot_confusion_matrix, plot_roc_curve, plot_pr_curve, set_seed
+from src.config import *
+import os
+import numpy as np
 
 def main():
     parser = argparse.ArgumentParser(description="GAT BRD4 Binding Prediction Pipeline")
-    parser.add_argument('--raw_file', type=str, default=os.path.join(DATA_RAW_DIR, BINDINGDB_FILENAME),
-                        help='Path to the raw BindingDB TSV file')
+    parser.add_argument('--raw_file', type=str, default=r'data/raw/leash-BELKA/train.csv',
+                        help='Path to the raw Leash BELKA CSV file')
     parser.add_argument('--processed_dir', type=str, default=DATA_PROCESSED_DIR,
                         help='Directory to save/load processed data')
     parser.add_argument('--cv', type=int, default=0,
@@ -22,50 +29,72 @@ def main():
                         help='Number of trials for optimization')
     args = parser.parse_args()
 
+    args = parser.parse_args()
+
+    # Set reproducibility
+    set_seed(SEED)
+
     print("Starting GAT BRD4 Binding Prediction Pipeline...")
     
     # 1. Data Acquisition & Processing
     raw_path = args.raw_file
     processed_dir = args.processed_dir
-    processed_path = os.path.join(processed_dir, 'data.pt')
+    processed_path = os.path.join(processed_dir, 'data_leash.pt') 
     
     # Ensure processed directory exists if using a custom one
     os.makedirs(processed_dir, exist_ok=True)
     
     if os.path.exists(processed_path):
         print(f"Found processed data at {processed_path}. Loading...")
+        if os.path.exists(os.path.join(processed_dir, 'data.pt')):
+            print("WARNING: 'data.pt' exists. Assuming it is valid or the user handles conflicts.")
         dataset = BRD4Dataset(root=processed_dir)
     else:
         # Check for cached CSV
-        filtered_csv_path = os.path.join(processed_dir, 'brd4_filtered.csv')
+        filtered_csv_path = os.path.join(processed_dir, 'leash_brd4_filtered.csv')
+        
+        if not os.path.exists(filtered_csv_path):
+             print(f"Cached filtered file {filtered_csv_path} not found.")
+             if not os.path.exists(raw_path):
+                print(f"ERROR: Raw data file not found at {raw_path}")
+                print("Please download Leash BELKA data and place it in data/raw/leash-BELKA/ or specify path with --raw_file")
+                return
+
+             # Process Leash data
+             # Two-step preparation
+             intermediate_file = os.path.join(processed_dir, '..', 'intermediate', 'brd4_all.csv')
+             
+             # 1. Filter
+             print("Step 1: Filtering Leash BELKA data for BRD4...")
+             from filter_protein import filter_protein_records
+             success = filter_protein_records(raw_path, intermediate_file, 'BRD4')
+             if not success:
+                 print("Filtering failed.")
+                 return
+                 
+             # 2. Prepare (Shuffle/Format)
+             print("Step 2: Preparing final dataset (Removing downsampling)...")
+             from prepare_leash_data import prepare_training_data
+             prepare_training_data(intermediate_file, filtered_csv_path, seed=42, chunk_size=1000000)
         
         if os.path.exists(filtered_csv_path):
             print(f"Loading cached filtered data from {filtered_csv_path}...")
             df = pd.read_csv(filtered_csv_path)
             print(f"Loaded {len(df)} records.")
+            
+            # RENAME COLUMNS
+            if 'molecule_smiles' in df.columns:
+                df.rename(columns={'molecule_smiles': 'Ligand SMILES'}, inplace=True)
+            if 'binds' in df.columns:
+                df.rename(columns={'binds': 'Label'}, inplace=True)
+            
+            print(f"Columns after renaming: {df.columns.tolist()}")
+
+            print(f"Creating Graph Dataset in {processed_dir} (this may take a while)...")
+            dataset = BRD4Dataset(root=processed_dir, df=df)
         else:
-            if not os.path.exists(raw_path):
-                print(f"ERROR: Raw data file not found at {raw_path}")
-                print("Please download 'BindingDB_All.tsv' (or zip) and place it in data/raw/ or specify path with --raw_file")
-                return
-                
-            # Load and filter in one go to save memory
-            df = load_and_filter_data(raw_path)
-            if df is None or df.empty:
-                print("No data found or error loading data.")
-                return
-                
-            print(f"Found {len(df)} records for BRD4.")
-            
-            print("Cleaning and Labeling...")
-            df = clean_and_label_data(df)
-            print(f"Final dataset size: {len(df)}")
-            
-            print(f"Saving filtered data to {filtered_csv_path}...")
-            df.to_csv(filtered_csv_path, index=False)
-        
-        print(f"Creating Graph Dataset in {processed_dir} (this may take a while)...")
-        dataset = BRD4Dataset(root=processed_dir, df=df)
+            print("Error: Failed to produce filtered CSV.")
+            return
         
     # 2. Optimization or Split & Train
     if args.optimize:

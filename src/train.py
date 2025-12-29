@@ -5,6 +5,7 @@ from src.utils import calculate_metrics, plot_loss_curve, plot_val_ap_curve, plo
 from src.config import *
 import os
 import numpy as np
+import pandas as pd
 
 def train_epoch(model, loader, optimizer, criterion, device):
     model.train()
@@ -88,6 +89,9 @@ def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fol
     save_prefix = f"fold_{fold_idx}_" if fold_idx is not None else ""
     model_save_name = f"{save_prefix}best_model.pth"
     
+    # Logging history
+    history = []
+
     for epoch in range(1, EPOCHS + 1):
         loss = train_epoch(model, train_loader, optimizer, criterion, device)
         val_metrics, _, _ = evaluate(model, val_loader, device)
@@ -95,6 +99,15 @@ def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fol
         
         train_losses.append(loss)
         val_aps.append(val_ap)
+        
+        # Log metrics
+        history.append({
+            'Epoch': epoch,
+            'Train_Loss': loss,
+            'Val_AP': val_metrics['AP'],
+            'Val_AUC': val_metrics['AUC'],
+            'Val_F1': val_metrics['F1']
+        })
         
         if verbose:
             print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Val AP: {val_ap:.4f}, Val AUC: {val_metrics["AUC"]:.4f}')
@@ -110,6 +123,20 @@ def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fol
         if patience_counter >= PATIENCE:
             print("Early stopping triggered.")
             break
+            
+    # Save training log to CSV
+    if plot:
+        # Determine log directory (same as plots)
+        if fold_idx is not None:
+            run_log_dir = os.path.join(PLOTS_DIR, f'fold_{fold_idx}')
+        else:
+            run_log_dir = os.path.join(PLOTS_DIR, 'single_run')
+            
+        os.makedirs(run_log_dir, exist_ok=True)
+        log_df = pd.DataFrame(history)
+        log_csv_path = os.path.join(run_log_dir, 'training_log.csv')
+        log_df.to_csv(log_csv_path, index=False)
+        print(f"Training log saved to {log_csv_path}")
             
     # Final Evaluation
     print(f"Loading best model for final evaluation ({model_save_name})...")
