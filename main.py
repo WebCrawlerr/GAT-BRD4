@@ -21,6 +21,8 @@ def main():
                         help='Path to the raw Leash BELKA CSV file')
     parser.add_argument('--processed_dir', type=str, default=DATA_PROCESSED_DIR,
                         help='Directory to save/load processed data')
+    parser.add_argument('--filtered_file', type=str, default=None,
+                        help='Path to a pre-filtered CSV file (e.g., for Kaggle input). If provided, skips filtering step.')
     parser.add_argument('--cv', type=int, default=0,
                         help='Number of folds for Cross-Validation (0 or 1 to disable)')
     parser.add_argument('--optimize', action='store_true',
@@ -49,6 +51,19 @@ def main():
         if os.path.exists(os.path.join(processed_dir, 'data.pt')):
             print("WARNING: 'data.pt' exists. Assuming it is valid or the user handles conflicts.")
         dataset = BRD4Dataset(root=processed_dir)
+    elif args.filtered_file and os.path.exists(args.filtered_file):
+        print(f"Loading filtered data from provided path: {args.filtered_file}...")
+        df = pd.read_csv(args.filtered_file)
+        print(f"Loaded {len(df)} records.")
+        
+        # RENAME COLUMNS
+        if 'molecule_smiles' in df.columns:
+            df.rename(columns={'molecule_smiles': 'Ligand SMILES'}, inplace=True)
+        if 'binds' in df.columns:
+            df.rename(columns={'binds': 'Label'}, inplace=True)
+            
+        print(f"Creating Graph Dataset in {processed_dir} (this may take a while)...")
+        dataset = BRD4Dataset(root=processed_dir, df=df)
     else:
         # Check for cached CSV
         filtered_csv_path = os.path.join(processed_dir, 'leash_brd4_filtered.csv')
