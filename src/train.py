@@ -91,6 +91,7 @@ def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fol
     
     # Logging history
     history = []
+    model_saved = False
 
     for epoch in range(1, EPOCHS + 1):
         loss = train_epoch(model, train_loader, optimizer, criterion, device)
@@ -117,6 +118,7 @@ def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fol
             best_val_ap = val_ap
             patience_counter = 0
             torch.save(model.state_dict(), os.path.join(MODEL_SAVE_DIR, model_save_name))
+            model_saved = True
         else:
             patience_counter += 1
             
@@ -139,8 +141,11 @@ def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fol
         print(f"Training log saved to {log_csv_path}")
             
     # Final Evaluation
-    print(f"Loading best model for final evaluation ({model_save_name})...")
-    model.load_state_dict(torch.load(os.path.join(MODEL_SAVE_DIR, model_save_name)))
+    if model_saved:
+        print(f"Loading best model for final evaluation ({model_save_name})...")
+        model.load_state_dict(torch.load(os.path.join(MODEL_SAVE_DIR, model_save_name)))
+    else:
+        print("Warning: No best model was saved (did not improve). Using final model state.")
     
     # If test dataset is provided, evaluate on it. Otherwise evaluate on Val set (for CV)
     eval_loader = test_loader if test_loader else val_loader
