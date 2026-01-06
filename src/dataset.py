@@ -6,27 +6,30 @@ import numpy as np
 from src.features import smiles_to_graph
 from tqdm import tqdm
 
-class BRD4Dataset(InMemoryDataset):
+class BRD4Dataset(Dataset):
     """
     PyTorch Geometric Dataset for BRD4 binding affinity prediction.
     
-    This dataset loads processed graph data from a .pt file. If the .pt file
-    does not exist, it processes a pandas DataFrame containing SMILES strings
-    and labels, converting them into graph objects suitable for GNNs.
-    
-    Args:
-        root (str): Root directory where the dataset should be saved.
-        df (pd.DataFrame, optional): DataFrame containing 'Ligand SMILES' and 'Label' columns.
-                                     Required for 'process' step if data is not already cached.
-        transform (callable, optional): A function/transform that takes in an
-            torch_geometric.data.Data object and returns a transformed version.
-        pre_transform (callable, optional): A function/transform that takes in
-            an torch_geometric.data.Data object and returns a transformed version.
+    Refactored to handle large datasets by storing chunks on disk instead of loading
+    everything into memory.
     """
-    def __init__(self, root, df=None, transform=None, pre_transform=None):
-        self.df = df
+    def __init__(self, root, filtered_file=None, chunk_size=100000, transform=None, pre_transform=None):
+        self.filtered_file = filtered_file
+        self.chunk_size = chunk_size
         super(BRD4Dataset, self).__init__(root, transform, pre_transform)
-        self.data, self.slices = torch.load(self.processed_paths[0], weights_only=False)
+        
+        # Load metadata if it exists
+        if os.path.exists(self.metadata_path):
+            self.metadata = torch.load(self.metadata_path)
+            self._num_samples = self.metadata['num_samples']
+            self.chunk_map = self.metadata['chunk_map']
+        else:
+            self._num_samples = 0
+            self.chunk_map = {} # sample_idx -> (chunk_idx, local_idx)
+
+        # Cache for loaded chunks to avoid hitting disk constantly
+        self.loaded_chunks = {}
+        self.max_cache_size = 5
 
     @property
     def raw_file_names(self):
@@ -34,37 +37,95 @@ class BRD4Dataset(InMemoryDataset):
 
     @property
     def processed_file_names(self):
-        return ['data.pt']
+        # We can't list all chunk files easily here without knowing how many there are beforehand
+        # So we just check for metadata and at least one chunk
+        return ['metadata.pt', 'data_0.pt']
+
+    @property
+    def metadata_path(self):
+        return os.path.join(self.processed_dir, 'metadata.pt')
 
     def download(self):
         pass
 
     def process(self):
-        if self.df is None:
-            raise ValueError("Dataframe must be provided for processing.")
+        if self.filtered_file is None:
+            # If we are here, it means proper processed files don't exist and we were not given a file to process
+            raise FileNotFoundError("Processed data not found and no 'filtered_file' provided.")
+
+        print(f"Processing {self.filtered_file} in chunks of {self.chunk_size}...")
         
-        data_list = []
-        failed_count = 0
-        for _, row in tqdm(self.df.iterrows(), total=len(self.df), desc="Processing Molecules"):
-            smiles = row['Ligand SMILES']
-            label = row['Label']
+        chunk_idx = 0
+        total_samples = 0
+        sample_map = {} # Map global_idx -> (chunk_idx, local_idx)
+        
+        # Read CSV in chunks
+        for chunk_df in pd.read_csv(self.filtered_file, chunksize=self.chunk_size):
+            data_list = []
             
-            data = smiles_to_graph(smiles, label)
-            if data is not None:
-                data_list.append(data)
-            else:
-                failed_count += 1
+            # Rename if needed (handling both conventions just in case)
+            if 'molecule_smiles' in chunk_df.columns:
+                chunk_df.rename(columns={'molecule_smiles': 'Ligand SMILES'}, inplace=True)
+            if 'binds' in chunk_df.columns:
+                chunk_df.rename(columns={'binds': 'Label'}, inplace=True)
+            
+            for _, row in tqdm(chunk_df.iterrows(), total=len(chunk_df), desc=f"Processing Chunk {chunk_idx}", leave=False):
+                smiles = row['Ligand SMILES']
+                label = row['Label']
                 
-        print(f"Processing complete. Successfully processed: {len(data_list)}. Failed: {failed_count}.")
+                data = smiles_to_graph(smiles, label)
+                
+                if data is not None:
+                    if self.pre_filter is not None and not self.pre_filter(data):
+                        continue
+                    if self.pre_transform is not None:
+                        data = self.pre_transform(data)
+                        
+                    data_list.append(data)
+                    
+                    # Map this sample
+                    sample_map[total_samples] = (chunk_idx, len(data_list) - 1)
+                    total_samples += 1
+            
+            # Save chunk
+            if len(data_list) > 0:
+                chunk_path = os.path.join(self.processed_dir, f'data_{chunk_idx}.pt')
+                torch.save(data_list, chunk_path)
+                chunk_idx += 1
+                
+        # Save metadata
+        metadata = {
+            'num_samples': total_samples,
+            'chunk_map': sample_map,
+            'num_chunks': chunk_idx
+        }
+        torch.save(metadata, self.metadata_path)
+        print(f"Processing complete. Total samples: {total_samples}. Chunks: {chunk_idx}.")
+
+    def len(self):
+        return self._num_samples
+
+    def get(self, idx):
+        if idx not in self.chunk_map:
+            raise IndexError(f"Index {idx} out of range (0-{self._num_samples-1})")
+            
+        chunk_idx, local_idx = self.chunk_map[idx]
         
-        if self.pre_filter is not None:
-            data_list = [data for data in data_list if self.pre_filter(data)]
-
-        if self.pre_transform is not None:
-            data_list = [self.pre_transform(data) for data in data_list]
-
-        data, slices = self.collate(data_list)
-        torch.save((data, slices), self.processed_paths[0])
+        # Check cache
+        if chunk_idx in self.loaded_chunks:
+            return self.loaded_chunks[chunk_idx][local_idx]
+        
+        # Load chunk
+        chunk_path = os.path.join(self.processed_dir, f'data_{chunk_idx}.pt')
+        data_list = torch.load(chunk_path, weights_only=False)
+        
+        # Update cache
+        if len(self.loaded_chunks) >= self.max_cache_size:
+            # Remove a random chunk (or oldest) - simple FIFO
+            self.loaded_chunks.pop(next(iter(self.loaded_chunks)))
+            
+        self.loaded_chunks[chunk_idx] = data_list
+        return data_list[local_idx]
 
 def generate_scaffold(smiles, include_chirality=False):
     """

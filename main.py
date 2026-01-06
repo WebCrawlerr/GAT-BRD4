@@ -1,12 +1,12 @@
 import os
 import argparse
-import pandas as pd
-import numpy as np
-import torch
 from src.config import *
-from src.data_processing import load_and_filter_data, clean_and_label_data
 from src.dataset import BRD4Dataset, scaffold_split
 from src.train import run_training
+import os
+import argparse
+import numpy as np
+import torch # Ensure torch is imported if needed for other parts, though mostly handled in other files
 from src.dataset import BRD4Dataset, scaffold_split
 from src.train import run_training
 
@@ -43,73 +43,38 @@ def main():
     processed_dir = args.processed_dir
     processed_path = os.path.join(processed_dir, 'data_leash.pt') 
     
-    # Ensure processed directory exists if using a custom one
+    # Ensure processed directory exists
     os.makedirs(processed_dir, exist_ok=True)
     
-    if os.path.exists(processed_path):
-        print(f"Found processed data at {processed_path}. Loading...")
-        if os.path.exists(os.path.join(processed_dir, 'data.pt')):
-            print("WARNING: 'data.pt' exists. Assuming it is valid or the user handles conflicts.")
-        dataset = BRD4Dataset(root=processed_dir)
-    elif args.filtered_file and os.path.exists(args.filtered_file):
-        print(f"Loading filtered data from provided path: {args.filtered_file}...")
-        df = pd.read_csv(args.filtered_file)
-        print(f"Loaded {len(df)} records.")
-        
-        # RENAME COLUMNS
-        if 'molecule_smiles' in df.columns:
-            df.rename(columns={'molecule_smiles': 'Ligand SMILES'}, inplace=True)
-        if 'binds' in df.columns:
-            df.rename(columns={'binds': 'Label'}, inplace=True)
-            
-        print(f"Creating Graph Dataset in {processed_dir} (this may take a while)...")
-        dataset = BRD4Dataset(root=processed_dir, df=df)
-    else:
-        # Check for cached CSV
-        filtered_csv_path = os.path.join(processed_dir, 'leash_brd4_filtered.csv')
-        
-        if not os.path.exists(filtered_csv_path):
-             print(f"Cached filtered file {filtered_csv_path} not found.")
-             if not os.path.exists(raw_path):
-                print(f"ERROR: Raw data file not found at {raw_path}")
-                print("Please download Leash BELKA data and place it in data/raw/leash-BELKA/ or specify path with --raw_file")
-                return
-
-             # Process Leash data
-             # Two-step preparation
-             intermediate_file = os.path.join(processed_dir, '..', 'intermediate', 'brd4_all.csv')
-             
-             # 1. Filter
-             print("Step 1: Filtering Leash BELKA data for BRD4...")
-             from filter_protein import filter_protein_records
-             success = filter_protein_records(raw_path, intermediate_file, 'BRD4')
-             if not success:
-                 print("Filtering failed.")
-                 return
-                 
-             # 2. Prepare (Shuffle/Format)
-             print("Step 2: Preparing final dataset (Removing downsampling)...")
-             from prepare_leash_data import prepare_training_data
-             prepare_training_data(intermediate_file, filtered_csv_path, seed=42, chunk_size=1000000)
-        
-        if os.path.exists(filtered_csv_path):
-            print(f"Loading cached filtered data from {filtered_csv_path}...")
-            df = pd.read_csv(filtered_csv_path)
-            print(f"Loaded {len(df)} records.")
-            
-            # RENAME COLUMNS
-            if 'molecule_smiles' in df.columns:
-                df.rename(columns={'molecule_smiles': 'Ligand SMILES'}, inplace=True)
-            if 'binds' in df.columns:
-                df.rename(columns={'binds': 'Label'}, inplace=True)
-            
-            print(f"Columns after renaming: {df.columns.tolist()}")
-
-            print(f"Creating Graph Dataset in {processed_dir} (this may take a while)...")
-            dataset = BRD4Dataset(root=processed_dir, df=df)
-        else:
-            print("Error: Failed to produce filtered CSV.")
-            return
+    # 2. Initialize Dataset
+    # The dataset class handles loading existing .pt files or processing the CSV if needed.
+    # We pass the filtered_file path if provided.
+    
+    target_csv = None
+    if args.filtered_file and os.path.exists(args.filtered_file):
+        print(f"Using provided filtered file: {args.filtered_file}")
+        target_csv = args.filtered_file
+    elif os.path.exists(os.path.join(processed_dir, 'leash_brd4_filtered.csv')):
+        target_csv = os.path.join(processed_dir, 'leash_brd4_filtered.csv')
+        print(f"Using default filtered file: {target_csv}")
+    
+    # If explicit processed data exists, it will load that.
+    # Otherwise it will try to process target_csv.
+    # If neither exists, and no target_csv provided, it might fail (handled in dataset).
+    
+    print(f"Initializing Graph Dataset in {processed_dir}...")
+    try:
+        dataset = BRD4Dataset(root=processed_dir, filtered_file=target_csv)
+    except FileNotFoundError as e:
+        # Fallback to generation if not found (legacy path)
+        print(f"Dataset not ready: {e}")
+        # Here we could re-implement the filtering call if absolutely needed,
+        # but for Kaggle usage the user usually provides the file.
+        print("Please provide a valid --filtered_file or ensure processed data exists.")
+        return
+    except Exception as e:
+        print(f"Error initializing dataset: {e}")
+        return
         
     # 2. Optimization or Split & Train
     if args.optimize:
