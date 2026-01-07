@@ -12,26 +12,27 @@ class BRD4Dataset(Dataset):
     """
     PyTorch Geometric Dataset for BRD4 binding affinity prediction.
     
-    Refactored to handle large datasets by storing chunks on disk instead of loading
-    everything into memory.
+    Implements on-the-fly graph generation and balanced sampling to handle 
+    large datasets (98M+) within Kaggle constraints.
     """
-    def __init__(self, root, filtered_file=None, chunk_size=100000, transform=None, pre_transform=None):
+    def __init__(self, root, filtered_file=None, limit=None, transform=None, pre_transform=None):
         self.filtered_file = filtered_file
-        self.chunk_size = chunk_size
+        self.limit = limit
         super(BRD4Dataset, self).__init__(root, transform, pre_transform)
         
-        # Load metadata if it exists
-        if os.path.exists(self.metadata_path):
-            self.metadata = torch.load(self.metadata_path)
-            self._num_samples = self.metadata['num_samples']
-            self.chunk_map = self.metadata['chunk_map']
-        else:
-            self._num_samples = 0
-            self.chunk_map = {} # sample_idx -> (chunk_idx, local_idx)
-
-        # Cache for loaded chunks to avoid hitting disk constantly
-        self.loaded_chunks = {}
-        self.max_cache_size = 5
+        # Load the sampled dataset (DataFrame)
+        # We expect 'processed_file_names' to handle the creation if missing
+        try:
+            self.df = pd.read_pickle(self.processed_paths[0])
+        except Exception as e:
+            # Fallback for older .pt files if any, though unlikely
+            try:
+                self.df = torch.load(self.processed_paths[0], weights_only=False)
+            except:
+                raise e
+            
+        self._num_samples = len(self.df)
+        print(f"Dataset loaded. Size: {self._num_samples}. Columns: {list(self.df.columns)}")
 
     @property
     def raw_file_names(self):
@@ -39,95 +40,133 @@ class BRD4Dataset(Dataset):
 
     @property
     def processed_file_names(self):
-        # We can't list all chunk files easily here without knowing how many there are beforehand
-        # So we just check for metadata and at least one chunk
-        return ['metadata.pt', 'data_0.pt']
-
-    @property
-    def metadata_path(self):
-        return os.path.join(self.processed_dir, 'metadata.pt')
+        # We save the sampled dataframe as a .pt file (pickle format)
+        file_name = f'sampled_data_limit_{self.limit}.pt' if self.limit else 'sampled_data_full.pt'
+        return [file_name]
 
     def download(self):
         pass
 
     def process(self):
         if self.filtered_file is None:
-            # If we are here, it means proper processed files don't exist and we were not given a file to process
             raise FileNotFoundError("Processed data not found and no 'filtered_file' provided.")
 
-        print(f"Processing {self.filtered_file} in chunks of {self.chunk_size}...")
+        print(f"Sampling from {self.filtered_file}...")
         
-        chunk_idx = 0
-        total_samples = 0
-        sample_map = {} # Map global_idx -> (chunk_idx, local_idx)
+        # Pass 1: Count classes to determine sampling probabilities
+        total_pos = 0
+        total_neg = 0
         
-        # Read CSV in chunks
-        for chunk_df in pd.read_csv(self.filtered_file, chunksize=self.chunk_size):
-            data_list = []
+        # Helper to detect column names for 'binds'
+        label_col = 'binds' 
+        
+        # Quick peek to check columns
+        peek = pd.read_csv(self.filtered_file, nrows=1)
+        if 'Label' in peek.columns:
+            label_col = 'Label'
+        elif 'binds' in peek.columns:
+            label_col = 'binds'
             
-            # Rename if needed (handling both conventions just in case)
-            if 'molecule_smiles' in chunk_df.columns:
-                chunk_df.rename(columns={'molecule_smiles': 'Ligand SMILES'}, inplace=True)
-            if 'binds' in chunk_df.columns:
-                chunk_df.rename(columns={'binds': 'Label'}, inplace=True)
+        print("Pass 1: Counting class distribution...")
+        for chunk in pd.read_csv(self.filtered_file, usecols=[label_col], chunksize=500000):
+            counts = chunk[label_col].value_counts()
+            total_pos += counts.get(1, 0)
+            total_neg += counts.get(0, 0)
             
-            for _, row in tqdm(chunk_df.iterrows(), total=len(chunk_df), desc=f"Processing Chunk {chunk_idx}", leave=False):
-                smiles = row['Ligand SMILES']
-                label = row['Label']
-                
-                data = smiles_to_graph(smiles, label)
-                
-                if data is not None:
-                    if self.pre_filter is not None and not self.pre_filter(data):
-                        continue
-                    if self.pre_transform is not None:
-                        data = self.pre_transform(data)
-                        
-                    data_list.append(data)
-                    
-                    # Map this sample
-                    sample_map[total_samples] = (chunk_idx, len(data_list) - 1)
-                    total_samples += 1
+        print(f"Found: Positives={total_pos}, Negatives={total_neg}")
+        
+        # Determine strict counts based on 1:3 ratio and limit
+        # Strategy: Take ALL positives (up to limit/4), fill rest with negatives (up to 3*pos)
+        
+        if self.limit:
+            n_pos_target = min(total_pos, self.limit // 4)
+            n_neg_target = min(total_neg, self.limit - n_pos_target) # Fill remainder, but usually 3*pos
             
-            # Save chunk
-            if len(data_list) > 0:
-                chunk_path = os.path.join(self.processed_dir, f'data_{chunk_idx}.pt')
-                torch.save(data_list, chunk_path)
-                chunk_idx += 1
+            # Refined strategy: First prioritize 1:3 ratio
+            desired_neg = n_pos_target * 3
+            if n_pos_target + desired_neg <= self.limit:
+                n_neg_target = min(total_neg, desired_neg)
+            else:
+                # Limit is very tight? This shouldn't happen with limit formula min(pos, limit//4)
+                pass
+        else:
+            # No limit -> Take all pos, 3x negs
+            n_pos_target = total_pos
+            n_neg_target = min(total_neg, total_pos * 3)
+            
+        print(f"Target: Positives={n_pos_target}, Negatives={n_neg_target}")
+        
+        p_pos = n_pos_target / total_pos if total_pos > 0 else 0
+        p_neg = n_neg_target / total_neg if total_neg > 0 else 0
+        
+        print(f"Sampling Probabilities: Pos={p_pos:.4f}, Neg={p_neg:.4f}")
+        
+        # Pass 2: Extract Samples
+        sampled_rows = []
+        
+        current_pos = 0
+        current_neg = 0
+        
+        print("Pass 2: Extracting samples...")
+        # Re-read full file
+        for chunk in pd.read_csv(self.filtered_file, chunksize=100000):
+            # Rename columns if raw file
+            if 'molecule_smiles' in chunk.columns:
+                chunk.rename(columns={'molecule_smiles': 'Ligand SMILES'}, inplace=True)
+            if 'binds' in chunk.columns:
+                chunk.rename(columns={'binds': 'Label'}, inplace=True)
+            
+            # Separate
+            pos_chunk = chunk[chunk['Label'] == 1]
+            neg_chunk = chunk[chunk['Label'] == 0]
+            
+            # Sample Positives
+            if not pos_chunk.empty and p_pos > 0:
+                if p_pos >= 1.0:
+                    selected_pos = pos_chunk
+                else:
+                    selected_pos = pos_chunk.sample(frac=p_pos)
+                sampled_rows.append(selected_pos)
+                current_pos += len(selected_pos)
                 
-        # Save metadata
-        metadata = {
-            'num_samples': total_samples,
-            'chunk_map': sample_map,
-            'num_chunks': chunk_idx
-        }
-        torch.save(metadata, self.metadata_path)
-        print(f"Processing complete. Total samples: {total_samples}. Chunks: {chunk_idx}.")
+            # Sample Negatives
+            if not neg_chunk.empty and p_neg > 0:
+                if p_neg >= 1.0:
+                    selected_neg = neg_chunk
+                else:
+                    selected_neg = neg_chunk.sample(frac=p_neg)
+                sampled_rows.append(selected_neg)
+                current_neg += len(selected_neg)
+        
+        # Combine
+        if len(sampled_rows) > 0:
+            final_df = pd.concat(sampled_rows, ignore_index=True)
+            # Shuffle
+            final_df = final_df.sample(frac=1, random_state=42).reset_index(drop=True)
+        else:
+            final_df = pd.DataFrame(columns=['Ligand SMILES', 'Label'])
+            
+        print(f"Final Dataset: {len(final_df)} samples ({final_df['Label'].sum()} positive)")
+        
+        # Save using pandas pickle
+        final_df.to_pickle(self.processed_paths[0])
 
     def len(self):
         return self._num_samples
 
     def get(self, idx):
-        if idx not in self.chunk_map:
-            raise IndexError(f"Index {idx} out of range (0-{self._num_samples-1})")
+        row = self.df.iloc[idx]
+        smiles = row['Ligand SMILES']
+        label = row['Label']
+        
+        # On-the-fly conversion
+        data = smiles_to_graph(smiles, label)
+        
+        # Attach Building Block info if available (for splitting)
+        if 'buildingblock1_smiles' in row:
+            data.buildingblock1_smiles = row['buildingblock1_smiles']
             
-        chunk_idx, local_idx = self.chunk_map[idx]
-        
-        # Check cache
-        if chunk_idx in self.loaded_chunks:
-            return self.loaded_chunks[chunk_idx][local_idx]
-        
-        # Load chunk
-        chunk_path = os.path.join(self.processed_dir, f'data_{chunk_idx}.pt')
-        data_list = torch.load(chunk_path, weights_only=False)
-        
-        # Update cache
-        if len(self.loaded_chunks) >= self.max_cache_size:
-            # Remove a random chunk (or oldest) - simple FIFO
-            self.loaded_chunks.pop(next(iter(self.loaded_chunks)))
-            
-        self.loaded_chunks[chunk_idx] = data_list
-        return data_list[local_idx]
+        return data
 
 def generate_scaffold(smiles, include_chirality=False):
     """
@@ -135,6 +174,51 @@ def generate_scaffold(smiles, include_chirality=False):
     """
     scaffold = MurckoScaffold.MurckoScaffoldSmiles(smiles=smiles, includeChirality=include_chirality)
     return scaffold
+
+def building_block_split(dataset, frac_train=0.8, frac_val=0.1, frac_test=0.1, seed=42):
+    """
+    Splits the dataset based on buildingblock1_smiles.
+    This is faster than scaffold split and chemically relevant for DEL libraries.
+    """
+    np.random.seed(seed)
+    
+    # Check if dataset has a dataframe (our BRD4Dataset does)
+    if hasattr(dataset, 'df') and 'buildingblock1_smiles' in dataset.df.columns:
+        print("Performing fast Building Block split using DataFrame...")
+        groups = dataset.df.groupby('buildingblock1_smiles').indices
+        bb_indices = list(groups.values())
+    else:
+        print("Performing generic Building Block split (slower)...")
+        # Fallback for generic datasets
+        bb_groups = defaultdict(list)
+        for idx, data in enumerate(dataset):
+            bb = getattr(data, 'buildingblock1_smiles', None)
+            if bb is None:
+                # Fallback to scaffold if BB missing
+                bb = generate_scaffold(data.smiles)
+            bb_groups[bb].append(idx)
+        bb_indices = list(bb_groups.values())
+
+    np.random.shuffle(bb_indices)
+    
+    train_idxs, val_idxs, test_idxs = [], [], []
+    
+    train_cutoff = frac_train * len(dataset)
+    val_cutoff = (frac_train + frac_val) * len(dataset)
+    
+    for indices in bb_indices:
+        if len(train_idxs) + len(indices) <= train_cutoff:
+            train_idxs.extend(indices)
+        elif len(train_idxs) + len(val_idxs) + len(indices) <= val_cutoff:
+            val_idxs.extend(indices)
+        else:
+            test_idxs.extend(indices)
+            
+    print(f"Split results: Train={len(train_idxs)}, Val={len(val_idxs)}, Test={len(test_idxs)}")
+    
+    # Return subsets (Lazy!)
+    from torch.utils.data import Subset
+    return Subset(dataset, train_idxs), Subset(dataset, val_idxs), Subset(dataset, test_idxs)
 
 def scaffold_split(dataset, frac_train=0.8, frac_val=0.1, frac_test=0.1, seed=42):
     """

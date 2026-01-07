@@ -7,7 +7,7 @@ import os
 import argparse
 import numpy as np
 import torch # Ensure torch is imported if needed for other parts, though mostly handled in other files
-from src.dataset import BRD4Dataset, scaffold_split
+from src.dataset import BRD4Dataset, scaffold_split, building_block_split
 from src.train import run_training
 
 from src.utils import calculate_metrics, plot_loss_curve, plot_val_ap_curve, plot_confusion_matrix, plot_roc_curve, plot_pr_curve, set_seed
@@ -23,6 +23,8 @@ def main():
                         help='Directory to save/load processed data')
     parser.add_argument('--filtered_file', type=str, default=None,
                         help='Path to a pre-filtered CSV file (e.g., for Kaggle input). If provided, skips filtering step.')
+    parser.add_argument('--limit', type=int, default=None,
+                        help='Limit the number of samples (for faster training on Kaggle). Uses balanced sampling (1:3).')
     parser.add_argument('--cv', type=int, default=0,
                         help='Number of folds for Cross-Validation (0 or 1 to disable)')
     parser.add_argument('--optimize', action='store_true',
@@ -64,7 +66,7 @@ def main():
     
     print(f"Initializing Graph Dataset in {processed_dir}...")
     try:
-        dataset = BRD4Dataset(root=processed_dir, filtered_file=target_csv)
+        dataset = BRD4Dataset(root=processed_dir, filtered_file=target_csv, limit=args.limit)
     except FileNotFoundError as e:
         # Fallback to generation if not found (legacy path)
         print(f"Dataset not ready: {e}")
@@ -83,33 +85,30 @@ def main():
         print("\nOptimization finished. You can now update src/config.py with these parameters.")
         
     elif args.cv > 1:
-        print(f"Starting {args.cv}-Fold Scaffold Cross-Validation...")
+        # Cross-Validation Mode
+        # Note: We can implement building_block_k_fold later if needed
         from src.dataset import scaffold_k_fold
         folds = scaffold_k_fold(dataset, k=args.cv)
         
-        cv_metrics = {'AUC': [], 'AP': [], 'F1': []}
+        avg_val_ap = 0
         
-        for i, (train_dataset, val_dataset) in enumerate(folds):
-            print(f"\n--- Fold {i+1}/{args.cv} ---")
-            print(f"Train: {len(train_dataset)}, Val: {len(val_dataset)}")
+        for fold_idx, (train_dataset, val_dataset) in enumerate(folds):
+            print(f"\n--- Fold {fold_idx + 1}/{args.cv} ---")
+            train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+            val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
             
-            metrics = run_training(train_dataset, val_dataset, test_dataset=None, fold_idx=i)
+            val_ap = run_training(train_loader, val_loader, fold_idx=fold_idx, plot=True)
+            avg_val_ap += val_ap
             
-            for k, v in metrics.items():
-                cv_metrics[k].append(v)
-                
-        print("\n=== Cross-Validation Results ===")
-        for k, v in cv_metrics.items():
-            print(f"Mean {k}: {np.mean(v):.4f} +/- {np.std(v):.4f}")
-            
+        print(f"\nAverage Val AP (CV): {avg_val_ap / args.cv:.4f}")
+        
     else:
-        print("Splitting data (Scaffold Split)...")
-        train_dataset, val_dataset, test_dataset = scaffold_split(dataset)
-        print(f"Train: {len(train_dataset)}, Val: {len(val_dataset)}, Test: {len(test_dataset)}")
+        # Single Run Mode
+        # Use Building Block split for speed and correctness on DEL data
+        print("Splitting data using Building Blocks...")
+        train_dataset, val_dataset, test_dataset = building_block_split(dataset)
         
-        # 3. Training
-        print("Starting Training...")
-        run_training(train_dataset, val_dataset, test_dataset)
+        run_training(train_dataset, val_dataset, test_dataset=test_dataset, plot=True)
     
     print("Pipeline Completed.")
 

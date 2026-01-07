@@ -73,9 +73,34 @@ def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fol
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=WEIGHT_DECAY)
     
     # Calculate pos_weight for imbalance
-    y_train = [data.y.item() for data in train_dataset]
-    num_pos = sum(y_train)
-    num_neg = len(y_train) - num_pos
+    # Calculate pos_weight for imbalance
+    # Optimization: If dataset has backing dataframe, use it to avoid slow iteration
+    try:
+        # Check if it's a Subset (from split)
+        # Fix: Check 'dataset' attr first to distinguish form Dataset with 'indices' method
+        if hasattr(train_dataset, 'dataset') and hasattr(train_dataset.dataset, 'df'):
+            indices = train_dataset.indices
+            labels = train_dataset.dataset.df.iloc[indices]['Label']
+            num_pos = labels.sum()
+            num_neg = len(labels) - num_pos
+        # Check if it's the base dataset
+        elif hasattr(train_dataset, 'df'):
+             # Caution: This counts WHOLE dataset if not subset. But usually run_training gets a subset.
+             labels = train_dataset.df['Label']
+             num_pos = labels.sum()
+             num_neg = len(labels) - num_pos
+        else:
+            # Fallback to slow iteration
+            print("Warning: calculating pos_weight via iteration (slow)...")
+            y_train = [data.y.item() for data in train_dataset]
+            num_pos = sum(y_train)
+            num_neg = len(y_train) - num_pos
+    except Exception as e:
+        print(f"Warning: Error in fast label counting ({e}). Falling back to default weight.")
+        num_pos = 1
+        num_neg = 1
+
+    print(f"Class Distribution in Train: Pos={num_pos}, Neg={num_neg}")
     pos_weight = torch.tensor([num_neg / num_pos], dtype=torch.float).to(device) if num_pos > 0 else torch.tensor([1.0]).to(device)
     
     criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
