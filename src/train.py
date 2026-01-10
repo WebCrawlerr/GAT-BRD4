@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 from torch_geometric.loader import DataLoader
 from src.utils import calculate_metrics, plot_loss_curve, plot_val_ap_curve, plot_confusion_matrix, plot_roc_curve, plot_pr_curve
+from src.loss import FocalLoss
 from src.config import *
 import os
 import numpy as np
@@ -101,9 +102,18 @@ def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fol
         num_neg = 1
 
     print(f"Class Distribution in Train: Pos={num_pos}, Neg={num_neg}")
-    pos_weight = torch.tensor([num_neg / num_pos], dtype=torch.float).to(device) if num_pos > 0 else torch.tensor([1.0]).to(device)
+    # pos_weight = torch.tensor([num_neg / num_pos], dtype=torch.float).to(device) if num_pos > 0 else torch.tensor([1.0]).to(device)
     
-    criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    # Focal Loss (Alpha strategy: inverse class frequency, similar to pos_weight but normalized to [0,1])
+    # alpha should be weight for class 1. Simple heuristic: num_neg / (num_pos + num_neg)
+    if num_pos > 0:
+        alpha = num_neg / (num_pos + num_neg)
+    else:
+        alpha = 0.5
+        
+    print(f"Focal Loss Alpha (Dynamic): {alpha:.4f}")
+    
+    criterion = FocalLoss(alpha=alpha, gamma=FOCAL_GAMMA)
     
     # Training Loop
     best_val_ap = 0

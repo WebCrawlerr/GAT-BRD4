@@ -29,5 +29,9 @@ EPOCHS = 100
 BATCH_SIZE = 32
 PATIENCE = 10 # Early stopping
 
+# Focal Loss Support
+FOCAL_GAMMA = 2.0
+FOCAL_ALPHA = 0.25 # Optional default, can be calculated dynamically
+
 # Random Seed
 SEED = 42
