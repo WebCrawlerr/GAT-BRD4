@@ -6,6 +6,14 @@ import torch_geometric
 from torch_geometric.loader import DataLoader
 import matplotlib.pyplot as plt
 
+
+# Add project root to path to allow imports from 'src'
+import sys
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.append(parent_dir)
+
 # Imports from project
 from src.config import *
 from src.dataset import BRD4Dataset, building_block_split
