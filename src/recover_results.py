@@ -114,7 +114,7 @@ def main():
         
         model = GATModel(num_node_features, num_edge_features, 
                          hidden_dim=GAT_HIDDEN_DIM, heads=GAT_HEADS, 
-                         layers=GAT_LAYERS, dropout=DROPOUT).to(device)
+                         num_layers=GAT_LAYERS, dropout=DROPOUT).to(device)
                          
         print("Loading weights...")
         model.load_state_dict(torch.load(model_path))
