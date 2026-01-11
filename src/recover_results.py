@@ -70,7 +70,7 @@ def main():
         print("No valid log lines found!")
 
     # 2. Evaluate Best Model (if exists)
-    model_path = os.path.join(MODEL_SAVE_DIR, 'best_model.pth')
+    model_path = "/kaggle/input/v1-0/pytorch/default/1/best_model.pth" 
     if os.path.exists(model_path):
         print(f"Found saved model: {model_path}. Proceeding to evaluation...")
         
