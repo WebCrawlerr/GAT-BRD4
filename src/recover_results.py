@@ -88,10 +88,7 @@ def main():
         LIMIT = 1500000
         
         print(f"Loading dataset (limit={LIMIT})...")
-        # Try to find the csv if needed, similar to main.py logic
-        target_csv = None
-        if os.path.exists(os.path.join(DATA_PROCESSED_DIR, 'leash_brd4_filtered.csv')):
-            target_csv = os.path.join(DATA_PROCESSED_DIR, 'leash_brd4_filtered.csv')
+        target_csv = /kaggle/input/gat-inz/leash_brd4_filtered.csv #os.path.join(DATA_PROCESSED_DIR, 'leash_brd4_filtered.csv')
             
         dataset = BRD4Dataset(root=DATA_PROCESSED_DIR, filtered_file=target_csv, limit=LIMIT)
         
