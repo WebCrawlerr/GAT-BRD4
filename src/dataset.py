@@ -170,19 +170,42 @@ class BRD4Dataset(Dataset):
         # Using concat on the queries
         final_lazy = pl.concat([q_pos, q_neg])
         
-        # Global shuffle (Dataset typically small enough to collect then shuffle? or use rand sort)
-        # We collect first then shuffle in pandas/numpy to be safe and compatible?
-        # Or shuffle in Polars eagerly.
+        # MEMORY OPTIMIZATION: Keep only necessary columns
+        # We need: 'Ligand SMILES' (graph), 'Label' (target), 'buildingblock3_smiles' (split)
+        # Test mode needs: 'Ligand SMILES', 'id'
+        
+        keep_cols = ['Ligand SMILES']
+        if self.test_mode:
+            if 'id' in schema.names():
+                keep_cols.append('id')
+            # BB3 might not be strictly needed for inference unless we split test data (unlikely for submission)
+        else:
+            keep_cols.append('Label')
+            if 'buildingblock3_smiles' in schema.names():
+                keep_cols.append('buildingblock3_smiles')
+        
+        # Select only these columns to save massive amounts of RAM
+        final_lazy = final_lazy.select(keep_cols)
         
         # Collect
+        # Note: We might want to optimize types here (e.g. Label to Int8/Bool) to save more
         final_df_pl = final_lazy.collect()
         
-        print(f"Final Dataset: {final_df_pl.height} samples ({final_df_pl['Label'].sum()} positive)")
+        print(f"Final Dataset: {final_df_pl.height} samples")
         
         # Convert to pandas for compatibility with existing pickle saving/loading
-        final_df_pd = final_df_pl.to_pandas()
+        # Explicitly del final_lazy to hint GC? (Not useful in Python usually)
         
-        # Shuffle (since we didn't do it globally in lazy mode)
+        final_df_pd = final_df_pl.to_pandas()
+        del final_df_pl # Free Polars memory immediately
+        import gc
+        gc.collect()
+        
+        # Downcast Label to int8 if exists
+        if 'Label' in final_df_pd.columns:
+            final_df_pd['Label'] = final_df_pd['Label'].astype('int8')
+        
+        # Shuffle
         final_df_pd = final_df_pd.sample(frac=1, random_state=42).reset_index(drop=True)
         
         # Save using pandas pickle
@@ -232,10 +255,11 @@ def generate_scaffold(smiles, include_chirality=False):
     scaffold = MurckoScaffold.MurckoScaffoldSmiles(smiles=smiles, includeChirality=include_chirality)
     return scaffold
 
-def building_block_split(dataset, frac_train=0.8, frac_val=0.1, frac_test=0.1, seed=42):
+def building_block_split(dataset, frac_train=0.85, frac_val=0.15, frac_test=0.0, seed=42):
     """
     Splits the dataset based on buildingblock3_smiles.
     This is faster than scaffold split and chemically relevant for DEL libraries.
+    Default: 85% Train, 15% Val, 0% Test (Maximize training data).
     """
     np.random.seed(seed)
     
