@@ -34,6 +34,10 @@ To run the full pipeline (data filtering -> processing -> training):
 ```bash
 python main.py --raw_file data/raw/leash-BELKA/train.csv
 ```
+Example of Kaggle run after cloning the repository:
+```bash
+!python main.py --raw_file /kaggle/input/gat-inz/leash_brd4_filtered.csv --processed_dir . --limit 2500000 --cv 0
+```
 
 **Options:**
 - `--optimize`: Run hyperparameter optimization with Optuna.
@@ -46,6 +50,17 @@ To run learning curve experiments:
 
 ```bash
 python run_experiments.py --experiment learning_curve
+```
+### 3. Inference
+
+To run inference on a test set in Kaggle environment:
+
+```bash
+!python -m src.inference \
+  --model_path /kaggle/input/v1-0/pytorch/default/1/best_model.pth \
+  --test_file /kaggle/input/leash-BELKA/test.csv \
+  --batch_size 4096 \
+  --output_file submission.csv
 ```
 
 ## Reproducibility
