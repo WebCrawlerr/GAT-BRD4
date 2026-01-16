@@ -20,7 +20,7 @@ TARGET_NAMES = ["BRD4", "Bromodomain-containing protein 4"]
 
 # Model Hyperparameters
 GAT_HEADS = 8
-GAT_HIDDEN_DIM = 64
+GAT_HIDDEN_DIM = 32
 GAT_LAYERS = 3
 DROPOUT = 0.11
 LEARNING_RATE = 0.0001
