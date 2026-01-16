@@ -130,7 +130,11 @@ def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fol
     val_aps = []
     
     save_prefix = f"fold_{fold_idx}_" if fold_idx is not None else ""
-    model_save_name = f"{save_prefix}best_model.pth"
+    
+    # Dynamic naming
+    train_size_str = f"{len(train_dataset)//1000}k" if hasattr(train_dataset, '__len__') else "unknown"
+    model_save_name = f"{save_prefix}gat_h{hidden_dim}_bs{BATCH_SIZE}_lr{lr}_data{train_size_str}_best.pth"
+    print(f"Model will be saved as: {model_save_name}")
     
     # Logging history
     history = []
@@ -160,7 +164,16 @@ def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fol
         if val_ap > best_val_ap:
             best_val_ap = val_ap
             patience_counter = 0
-            torch.save(model.state_dict(), os.path.join(MODEL_SAVE_DIR, model_save_name))
+            
+            # 1. Save Detailed Version (Archival)
+            detailed_name = f"{save_prefix}gat_h{hidden_dim}_ep{epoch:02d}_ap{val_ap:.4f}.pth"
+            torch.save(model.state_dict(), os.path.join(MODEL_SAVE_DIR, detailed_name))
+            
+            # 2. Save Generic 'Best' Version (operational convenience)
+            # This allows inference.py to work without changing arguments every time
+            torch.save(model.state_dict(), os.path.join(MODEL_SAVE_DIR, "best_model.pth"))
+            
+            print(f" -> New Best Model Saved! ({detailed_name} & best_model.pth)")
             model_saved = True
         else:
             patience_counter += 1
