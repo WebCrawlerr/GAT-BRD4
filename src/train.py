@@ -42,7 +42,7 @@ def evaluate(model, loader, device):
     metrics = calculate_metrics(np.array(y_true), np.array(y_pred_logits))
     return metrics, np.array(y_true), np.array(y_pred_logits)
 
-def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fold_idx=None, plot=True, verbose=True):
+def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fold_idx=None, target_name='BRD4', plot=True, verbose=True):
     # Config overrides
     hidden_dim = config.get('hidden_dim', GAT_HIDDEN_DIM) if config else GAT_HIDDEN_DIM
     heads = config.get('heads', GAT_HEADS) if config else GAT_HEADS
@@ -133,7 +133,7 @@ def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fol
     
     # Dynamic naming
     train_size_str = f"{len(train_dataset)//1000}k" if hasattr(train_dataset, '__len__') else "unknown"
-    model_save_name = f"{save_prefix}gat_h{hidden_dim}_bs{BATCH_SIZE}_lr{lr}_data{train_size_str}_best.pth"
+    model_save_name = f"{save_prefix}{target_name}_gat_h{hidden_dim}_bs{BATCH_SIZE}_lr{lr}_data{train_size_str}_best.pth"
     print(f"Model will be saved as: {model_save_name}")
     
     # Logging history
@@ -166,12 +166,12 @@ def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fol
             patience_counter = 0
             
             # 1. Save Detailed Version (Archival)
-            detailed_name = f"{save_prefix}gat_h{hidden_dim}_ep{epoch:02d}_ap{val_ap:.4f}.pth"
+            detailed_name = f"{save_prefix}{target_name}_gat_h{hidden_dim}_ep{epoch:02d}_ap{val_ap:.4f}.pth"
             torch.save(model.state_dict(), os.path.join(MODEL_SAVE_DIR, detailed_name))
             
             # 2. Save Generic 'Best' Version (operational convenience)
             # This allows inference.py to work without changing arguments every time
-            torch.save(model.state_dict(), os.path.join(MODEL_SAVE_DIR, "best_model.pth"))
+            torch.save(model.state_dict(), os.path.join(MODEL_SAVE_DIR, f"{target_name}_best_model.pth"))
             
             print(f" -> New Best Model Saved! ({detailed_name} & best_model.pth)")
             model_saved = True

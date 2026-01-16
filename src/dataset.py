@@ -16,9 +16,10 @@ class BRD4Dataset(Dataset):
     Implements on-the-fly graph generation and balanced sampling to handle 
     large datasets (98M+) within Kaggle constraints.
     """
-    def __init__(self, root, filtered_file=None, limit=None, test_mode=False, transform=None, pre_transform=None):
+    def __init__(self, root, filtered_file=None, limit=None, target_name='BRD4', test_mode=False, transform=None, pre_transform=None):
         self.filtered_file = filtered_file
         self.limit = limit
+        self.target_name = target_name
         self.test_mode = test_mode
         super(BRD4Dataset, self).__init__(root, transform, pre_transform)
         
@@ -44,8 +45,8 @@ class BRD4Dataset(Dataset):
     def processed_file_names(self):
         # We save the sampled dataframe as a .pt file (pickle format)
         if self.test_mode:
-            return ['processed_test_data.pt']
-        file_name = f'sampled_data_limit_{self.limit}.pt' if self.limit else 'sampled_data_full.pt'
+            return [f'processed_test_data_{self.target_name}.pt']
+        file_name = f'sampled_data_{self.target_name}_limit_{self.limit}.pt' if self.limit else f'sampled_data_{self.target_name}_full.pt'
         return [file_name]
 
     def download(self):
@@ -122,16 +123,9 @@ class BRD4Dataset(Dataset):
                 n_pos_target = self.limit
                 n_neg_target = 0
             else:
-                # We have space. Fill with negatives up to 3x positives (or until limit hit)
-                # Standard downsampling ratio 1:3
-                desired_neg = n_pos_target * 3
-                
-                # Check if we fit in limit
-                if n_pos_target + desired_neg <= self.limit:
-                    n_neg_target = desired_neg
-                else:
-                    # Fill remaining space
-                    n_neg_target = self.limit - n_pos_target
+                # We have space. Fill remaining space with negatives up to the limit
+                # User preference: Maximize data usage rather than strict 1:3 ratio
+                n_neg_target = self.limit - n_pos_target
         else:
             # No limit: Take all positives and 3x negatives
             n_neg_target = min(total_neg, n_pos_target * 3)

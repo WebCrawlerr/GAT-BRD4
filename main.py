@@ -23,6 +23,8 @@ def main():
                         help='Directory to save/load processed data')
     parser.add_argument('--filtered_file', type=str, default=None,
                         help='Path to a pre-filtered CSV file (e.g., for Kaggle input). If provided, skips filtering step.')
+    parser.add_argument('--target', type=str, default='BRD4',
+                        help='Target protein name (BRD4, HSA, sEH)')
     parser.add_argument('--limit', type=int, default=None,
                         help='Limit the number of samples (for faster training on Kaggle). Uses balanced sampling (1:3).')
     parser.add_argument('--cv', type=int, default=0,
@@ -56,8 +58,8 @@ def main():
     if args.filtered_file and os.path.exists(args.filtered_file):
         print(f"Using provided filtered file: {args.filtered_file}")
         target_csv = args.filtered_file
-    elif os.path.exists(os.path.join(processed_dir, 'leash_brd4_filtered.csv')):
-        target_csv = os.path.join(processed_dir, 'leash_brd4_filtered.csv')
+    elif os.path.exists(os.path.join(processed_dir, f'leash_{args.target.lower()}_filtered.csv')):
+        target_csv = os.path.join(processed_dir, f'leash_{args.target.lower()}_filtered.csv')
         print(f"Using default filtered file: {target_csv}")
     
     # If explicit processed data exists, it will load that.
@@ -66,7 +68,7 @@ def main():
     
     print(f"Initializing Graph Dataset in {processed_dir}...")
     try:
-        dataset = BRD4Dataset(root=processed_dir, filtered_file=target_csv, limit=args.limit)
+        dataset = BRD4Dataset(root=processed_dir, filtered_file=target_csv, limit=args.limit, target_name=args.target)
     except FileNotFoundError as e:
         # Fallback to generation if not found (legacy path)
         print(f"Dataset not ready: {e}")
@@ -97,7 +99,7 @@ def main():
             train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
             val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
             
-            val_ap = run_training(train_loader, val_loader, fold_idx=fold_idx, plot=True)
+            val_ap = run_training(train_loader, val_loader, fold_idx=fold_idx, target_name=args.target, plot=True)
             avg_val_ap += val_ap
             
         print(f"\nAverage Val AP (CV): {avg_val_ap / args.cv:.4f}")
@@ -108,7 +110,7 @@ def main():
         print("Splitting data using Building Blocks...")
         train_dataset, val_dataset, test_dataset = building_block_split(dataset)
         
-        run_training(train_dataset, val_dataset, test_dataset=test_dataset, plot=True)
+        run_training(train_dataset, val_dataset, test_dataset=test_dataset, target_name=args.target, plot=True)
     
     print("Pipeline Completed.")
 
