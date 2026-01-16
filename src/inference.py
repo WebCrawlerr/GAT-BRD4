@@ -52,8 +52,14 @@ def run_inference(model_path, test_file, output_file, batch_size=None, limit=Non
     ids = []
     probs = []
     
+    ids = []
+    probs = []
+    
+    total_batches = len(loader)
+    print(f"Total batches to process: {total_batches}")
+    
     with torch.no_grad():
-        for data in tqdm(loader, desc="Inference"):
+        for i, data in enumerate(tqdm(loader, desc="Inference")):
             data = data.to(device)
             
             # Forward pass
@@ -61,6 +67,10 @@ def run_inference(model_path, test_file, output_file, batch_size=None, limit=Non
             
             # Sigmoid to get probability (Test Mode Requirement!)
             p = torch.sigmoid(logits).view(-1).cpu().numpy()
+            
+            # Log progress every 10%
+            if i % max(1, (total_batches // 10)) == 0:
+                print(f"Progress: {i}/{total_batches} batches ({i/total_batches:.0%})")
             
             # Collect IDs
             # data.id is a batch
