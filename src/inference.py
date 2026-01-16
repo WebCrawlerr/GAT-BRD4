@@ -21,7 +21,7 @@ def run_inference(model_path, test_file, output_file, batch_size=None, limit=Non
     # 1. Load Data
     # test_mode=True is critical here
     print(f"Loading test data from {test_file}...")
-    dataset = BRD4Dataset(root=os.path.dirname(test_file), filtered_file=test_file, limit=limit, test_mode=True)
+    dataset = BRD4Dataset(root='.', filtered_file=test_file, limit=limit, test_mode=True)
     
     # Optimization: Multi-process loading
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, 
