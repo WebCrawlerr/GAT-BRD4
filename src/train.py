@@ -58,9 +58,17 @@ def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fol
             print(f"Using device: {device}")
     
     # DataLoaders
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
-    test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False) if test_dataset else None
+    # Use num_workers to parallelize graph conversion (CPU) while GPU trains
+    # pin_memory speeds up transfer to GPU
+    num_workers = 4
+    pin_memory = torch.cuda.is_available()
+    
+    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True,
+                              num_workers=num_workers, pin_memory=pin_memory)
+    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False,
+                            num_workers=num_workers, pin_memory=pin_memory)
+    test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False,
+                             num_workers=num_workers, pin_memory=pin_memory) if test_dataset else None
     
     # Model
     # Get num features from first data object

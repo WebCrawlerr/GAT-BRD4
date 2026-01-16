@@ -22,7 +22,10 @@ def run_inference(model_path, test_file, output_file, batch_size=None, limit=Non
     # test_mode=True is critical here
     print(f"Loading test data from {test_file}...")
     dataset = BRD4Dataset(root=os.path.dirname(test_file), filtered_file=test_file, limit=limit, test_mode=True)
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+    
+    # Optimization: Multi-process loading
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, 
+                        num_workers=4, pin_memory=torch.cuda.is_available())
     
     # 2. Load Model
     # We need to know input features

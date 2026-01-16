@@ -84,6 +84,11 @@ def smiles_to_graph(smiles, label=None):
     """
     Converts a SMILES string to a PyTorch Geometric Data object.
     """
+    # Fix for BELKA dataset: Replace Dysprosium [Dy] token with Carbon [C]
+    # RDKit fails or produces invalid graphs for [Dy] in this context.
+    if '[Dy]' in smiles:
+        smiles = smiles.replace('[Dy]', 'C')
+        
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         return None
