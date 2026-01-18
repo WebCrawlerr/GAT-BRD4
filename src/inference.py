@@ -11,7 +11,7 @@ from src.config import *
 from src.dataset import BRD4Dataset
 from src.model import GATModel
 
-def run_inference(model_path, test_file, output_file, batch_size=None, limit=None):
+def run_inference(model_path, test_file, output_file, batch_size=None, limit=None, target_name='BRD4'):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
     
@@ -21,7 +21,7 @@ def run_inference(model_path, test_file, output_file, batch_size=None, limit=Non
     # 1. Load Data
     # test_mode=True is critical here
     print(f"Loading test data from {test_file}...")
-    dataset = BRD4Dataset(root='.', filtered_file=test_file, limit=limit, test_mode=True)
+    dataset = BRD4Dataset(root='.', filtered_file=test_file, limit=limit, test_mode=True, target_name=target_name)
     
     # Optimization: Multi-process loading
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, 
@@ -97,8 +97,10 @@ def run_inference(model_path, test_file, output_file, batch_size=None, limit=Non
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="GAT Inference for Kaggle Submission")
-    parser.add_argument('--model_path', type=str, default=os.path.join(MODEL_SAVE_DIR, 'best_model.pth'),
-                        help='Path to the trained model checkpoint')
+    parser.add_argument('--model_path', type=str, default=None,
+                        help='Path to the trained model checkpoint (optional, defaults to models/{target}_best_model.pth)')
+    parser.add_argument('--target', type=str, default='BRD4',
+                        help='Target protein name (for automatic model finding)')
     parser.add_argument('--test_file', type=str, default='data/raw/leash-BELKA/test.csv',
                         help='Path to the test CSV file')
     parser.add_argument('--output_file', type=str, default='submission.csv',
@@ -110,4 +112,11 @@ if __name__ == "__main__":
                         
     args = parser.parse_args()
     
-    run_inference(args.model_path, args.test_file, args.output_file, args.batch_size, args.limit)
+    # Determine model path
+    if args.model_path is None:
+        # Auto-construct based on target
+        # Assuming standard naming from train.py
+        args.model_path = os.path.join(MODEL_SAVE_DIR, f"{args.target}_best_model.pth")
+        print(f"Auto-selected model path: {args.model_path}")
+    
+    run_inference(args.model_path, args.test_file, args.output_file, args.batch_size, args.limit, args.target)

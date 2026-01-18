@@ -23,21 +23,34 @@ from src.train import evaluate
 
 # 1. LOG DATA (Paste your log here)
 LOG_DATA = """
-626.0s	    264	Class Distribution in Train: Pos=300687, Neg=896602
-3505.6s 	265	Epoch: 001, Loss: 0.5603, Val AP: 0.8744, Val AUC: 0.9255
-6381.3s	    266	Epoch: 002, Loss: 0.4079, Val AP: 0.8995, Val AUC: 0.9434
-9261.6s 	267	Epoch: 003, Loss: 0.3881, Val AP: 0.8850, Val AUC: 0.9332
-12137.1s	268	Epoch: 004, Loss: 0.3788, Val AP: 0.8811, Val AUC: 0.9309
-15188.1s	269	Epoch: 005, Loss: 0.3722, Val AP: 0.9120, Val AUC: 0.9531
-18050.4s	270	Epoch: 006, Loss: 0.3683, Val AP: 0.8896, Val AUC: 0.9366
-20907.2s	271	Epoch: 007, Loss: 0.3651, Val AP: 0.8786, Val AUC: 0.9286
-23783.1s	272	Epoch: 008, Loss: 0.3625, Val AP: 0.8751, Val AUC: 0.9252
-26661.7s	273	Epoch: 009, Loss: 0.3610, Val AP: 0.8997, Val AUC: 0.9436
-29578.9s	274	Epoch: 010, Loss: 0.3599, Val AP: 0.8993, Val AUC: 0.9442
-32457.3s	275	Epoch: 011, Loss: 0.3589, Val AP: 0.8877, Val AUC: 0.9352
-35343.5s	276	Epoch: 012, Loss: 0.3582, Val AP: 0.8954, Val AUC: 0.9425
-38214.3s	277	Epoch: 013, Loss: 0.3557, Val AP: 0.8807, Val AUC: 0.9286
-41065.4s	278	Epoch: 014, Loss: 0.3551, Val AP: 0.8808, Val AUC: 0.9269
+1894.6s	268	Epoch: 001, Loss: 0.1216, Val AP: 0.3959, Val AUC: 0.7005
+3428.6s	269	Epoch: 002, Loss: 0.1163, Val AP: 0.4245, Val AUC: 0.7229
+4956.4s	270	Epoch: 003, Loss: 0.1131, Val AP: 0.4635, Val AUC: 0.7478
+6490.6s	271	Epoch: 004, Loss: 0.1110, Val AP: 0.4753, Val AUC: 0.7561
+8023.7s	272	Epoch: 005, Loss: 0.1100, Val AP: 0.4852, Val AUC: 0.7632
+9553.0s	273	Epoch: 006, Loss: 0.1084, Val AP: 0.4969, Val AUC: 0.7724
+11080.3s	274	Epoch: 007, Loss: 0.1061, Val AP: 0.5028, Val AUC: 0.7792
+12604.3s	275	Epoch: 008, Loss: 0.1037, Val AP: 0.5112, Val AUC: 0.7840
+14133.1s	276	Epoch: 009, Loss: 0.1021, Val AP: 0.5140, Val AUC: 0.7846
+15659.4s	277	Epoch: 010, Loss: 0.1011, Val AP: 0.5227, Val AUC: 0.7887
+17183.3s	278	Epoch: 011, Loss: 0.1001, Val AP: 0.5269, Val AUC: 0.7911
+18709.6s	279	Epoch: 012, Loss: 0.0993, Val AP: 0.5317, Val AUC: 0.7951
+20228.0s	280	Epoch: 013, Loss: 0.0984, Val AP: 0.5407, Val AUC: 0.8004
+21741.7s	281	Epoch: 014, Loss: 0.0972, Val AP: 0.5580, Val AUC: 0.8108
+23255.7s	282	Epoch: 015, Loss: 0.0955, Val AP: 0.5783, Val AUC: 0.8224
+24769.3s	283	Epoch: 016, Loss: 0.0943, Val AP: 0.5970, Val AUC: 0.8294
+26295.5s	284	Epoch: 017, Loss: 0.0935, Val AP: 0.6079, Val AUC: 0.8338
+27825.2s	285	Epoch: 018, Loss: 0.0929, Val AP: 0.6187, Val AUC: 0.8374
+29362.1s	286	Epoch: 019, Loss: 0.0923, Val AP: 0.6265, Val AUC: 0.8410
+30881.5s	287	Epoch: 020, Loss: 0.0918, Val AP: 0.6370, Val AUC: 0.8436
+32409.0s	288	Epoch: 021, Loss: 0.0912, Val AP: 0.6462, Val AUC: 0.8462
+33947.5s	289	Epoch: 022, Loss: 0.0906, Val AP: 0.6555, Val AUC: 0.8492
+35477.0s	290	Epoch: 023, Loss: 0.0900, Val AP: 0.6682, Val AUC: 0.8536
+36993.5s	291	Epoch: 024, Loss: 0.0891, Val AP: 0.6788, Val AUC: 0.8565
+38516.5s	292	Epoch: 025, Loss: 0.0880, Val AP: 0.6908, Val AUC: 0.8606
+40035.8s	293	Epoch: 026, Loss: 0.0869, Val AP: 0.7001, Val AUC: 0.8641
+41557.0s	294	Epoch: 027, Loss: 0.0860, Val AP: 0.7090, Val AUC: 0.8669
+43077.5s	295	Epoch: 028, Loss: 0.0852, Val AP: 0.7176, Val AUC: 0.8695
 """
 
 def parse_logs(log_text):

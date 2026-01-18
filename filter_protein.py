@@ -27,12 +27,19 @@ def filter_protein_records(input_file, output_file, target_protein, chunk_size=1
                     print("Error: 'protein_name' column missing.")
                     return False
                 
-                # Filter
+                # Filter rows
                 chunk_filtered = chunk[chunk['protein_name'] == target_protein]
                 
                 if chunk_filtered.empty:
                     total_processed += len(chunk)
                     continue
+                
+                # OPTIMIZATION: Keep only necessary columns to save disk space
+                # We need: molecule_smiles (for graph), binds (label), buildingblock3_smiles (for split)
+                cols_to_keep = ['molecule_smiles', 'binds', 'buildingblock3_smiles']
+                # Check which ones exist
+                existing_cols = [c for c in cols_to_keep if c in chunk_filtered.columns]
+                chunk_filtered = chunk_filtered[existing_cols]
                 
                 # Save
                 mode = 'w' if first_chunk else 'a'
