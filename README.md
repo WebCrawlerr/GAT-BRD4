@@ -1,6 +1,6 @@
 # GAT BRD4 Binding Prediction
 
-This project implements a Graph Attention Network (GAT) to predict the binding affinity of small molecules to the BRD4 protein using the Leash BELKA dataset. It was developed as part of an engineering thesis.
+This project implements a Graph Attention Network (GAT) to predict the binding affinity of small molecules to the BRD4 protein using the Leash BELKA dataset. It was developed as part of the engineering thesis entitled 'Development and validation of a predictive model based on graph architecture for assessing the affinity of small molecules for BRD4 protein', authored by Kacper Wieczorek (Student ID: 264471).
 
 ## Project Structure
 
