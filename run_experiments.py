@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 from src.config import *
-from src.dataset import BRD4Dataset, scaffold_split
+from src.dataset import BRD4Dataset, building_block_split
 from src.train import run_training
 from src.model import GATModel
 import torch_geometric.loader
@@ -14,7 +14,13 @@ def run_learning_curve(dataset, fractions=[0.2, 0.4, 0.6, 0.8, 1.0]):
     print("\n=== Running Learning Curve Experiment ===")
     
     # Use a fixed split for consistency
-    train_dataset_full, val_dataset, test_dataset = scaffold_split(dataset, seed=42)
+    train_dataset_full, val_dataset, test_dataset = building_block_split(
+    dataset, 
+    frac_train=0.8, 
+    frac_val=0.1, 
+    frac_test=0.1, 
+    seed=42
+)
     
     results = {'Fraction': [], 'Train_Size': [], 'Val_AP': [], 'Val_AUC': [], 'Val_F0.5': []}
     
@@ -23,10 +29,18 @@ def run_learning_curve(dataset, fractions=[0.2, 0.4, 0.6, 0.8, 1.0]):
     # We will take the first N samples from the shuffled train set.
     
     total_train_size = len(train_dataset_full)
+    # Time tracking for info (optional, or just rely on standard logs)
+    import time
+    start_time = time.time()
     
+    save_path = os.path.join(PLOTS_DIR, 'learning_curve_results.csv')
+
     for frac in fractions:
+        # Check time for logging but don't break
+        elapsed = time.time() - start_time
+        
         subset_size = int(total_train_size * frac)
-        print(f"\nTraining with {frac*100}% data ({subset_size} samples)...")
+        print(f"\nTraining with {frac*100}% data ({subset_size} samples)... (Elapsed: {elapsed/3600:.2f}h)")
         
         # Create subset
         train_subset = train_dataset_full[:subset_size]
@@ -42,13 +56,13 @@ def run_learning_curve(dataset, fractions=[0.2, 0.4, 0.6, 0.8, 1.0]):
         
         print(f"  -> AP: {metrics['AP']:.4f}, AUC: {metrics['AUC']:.4f}, F0.5: {metrics['F0.5']:.4f}")
         
-    # Save results
-    df_results = pd.DataFrame(results)
-    save_path = os.path.join(PLOTS_DIR, 'learning_curve_results.csv')
-    df_results.to_csv(save_path, index=False)
+        # Save results incrementally
+        df_results = pd.DataFrame(results)
+        df_results.to_csv(save_path, index=False)
+        print(f"  [Progress Saved] to {save_path}")
+        
+    # Final Plotting
     print(f"\nResults saved to {save_path}")
-    
-    # Plotting
     plt.figure(figsize=(10, 6))
     plt.plot(df_results['Fraction'], df_results['Val_AP'], marker='o', label='AP')
     plt.plot(df_results['Fraction'], df_results['Val_AUC'], marker='s', label='AUC')

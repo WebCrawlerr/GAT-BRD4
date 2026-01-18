@@ -249,11 +249,11 @@ def generate_scaffold(smiles, include_chirality=False):
     scaffold = MurckoScaffold.MurckoScaffoldSmiles(smiles=smiles, includeChirality=include_chirality)
     return scaffold
 
-def building_block_split(dataset, frac_train=0.85, frac_val=0.15, frac_test=0.0, seed=42):
+def building_block_split(dataset, frac_train=0.8, frac_val=0.1, frac_test=0.1, seed=42):
     """
     Splits the dataset based on buildingblock3_smiles.
     This is faster than scaffold split and chemically relevant for DEL libraries.
-    Default: 85% Train, 15% Val, 0% Test (Maximize training data).
+    Default: 80% Train, 10% Val, 10% Test (Maximize training data).
     """
     np.random.seed(seed)
     
