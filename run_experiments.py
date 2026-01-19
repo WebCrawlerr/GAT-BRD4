@@ -10,7 +10,7 @@ from src.train import run_training
 from src.model import GATModel
 import torch_geometric.loader
 
-def run_learning_curve(dataset, fractions=[0.2, 0.4, 0.6, 0.8, 1.0]):
+def run_learning_curve(dataset, epochs=None, fractions=[0.2, 0.4, 0.6, 0.8, 1.0]):
     print("\n=== Running Learning Curve Experiment ===")
     
     # Use a fixed split for consistency
@@ -20,7 +20,7 @@ def run_learning_curve(dataset, fractions=[0.2, 0.4, 0.6, 0.8, 1.0]):
     frac_val=0.1, 
     frac_test=0.1, 
     seed=42
-)
+    )
     
     results = {'Fraction': [], 'Train_Size': [], 'Val_AP': [], 'Val_AUC': [], 'Val_F0.5': []}
     
@@ -35,6 +35,9 @@ def run_learning_curve(dataset, fractions=[0.2, 0.4, 0.6, 0.8, 1.0]):
     
     save_path = os.path.join(PLOTS_DIR, 'learning_curve_results.csv')
 
+    # Prepare config override
+    config_override = {'epochs': epochs} if epochs else None
+
     for frac in fractions:
         # Check time for logging but don't break
         elapsed = time.time() - start_time
@@ -47,7 +50,7 @@ def run_learning_curve(dataset, fractions=[0.2, 0.4, 0.6, 0.8, 1.0]):
         
         # Run training (plot only for the last fraction to generate confusion matrix, etc.)
         is_last = (frac == fractions[-1])
-        metrics = run_training(train_subset, val_dataset, test_dataset=None, plot=is_last, verbose=False)
+        metrics = run_training(train_subset, val_dataset, test_dataset=None, config=config_override, plot=is_last, verbose=False)
         
         results['Fraction'].append(frac)
         results['Train_Size'].append(subset_size)
@@ -83,6 +86,7 @@ def main():
     parser.add_argument('--target', type=str, default='BRD4', help='Target protein name (BRD4, HSA, sEH)')
     parser.add_argument('--filtered_file', type=str, default=None, help='Path to pre-filtered CSV')
     parser.add_argument('--limit', type=int, default=None, help='Limit dataset size')
+    parser.add_argument('--epochs', type=int, default=None, help='Override number of epochs')
     parser.add_argument('--experiment', type=str, choices=['learning_curve'], default='learning_curve')
     args = parser.parse_args()
     
@@ -120,7 +124,7 @@ def main():
         return
             
     if args.experiment == 'learning_curve':
-        run_learning_curve(dataset)
+        run_learning_curve(dataset, epochs=args.epochs)
 
 if __name__ == "__main__":
     main()

@@ -49,6 +49,7 @@ def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fol
     layers = config.get('layers', GAT_LAYERS) if config else GAT_LAYERS
     dropout = config.get('dropout', DROPOUT) if config else DROPOUT
     lr = config.get('lr', LEARNING_RATE) if config else LEARNING_RATE
+    epochs = config.get('epochs', EPOCHS) if config else EPOCHS
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     if verbose:
@@ -140,7 +141,7 @@ def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fol
     history = []
     model_saved = False
 
-    for epoch in range(1, EPOCHS + 1):
+    for epoch in range(1, epochs + 1):
         loss = train_epoch(model, train_loader, optimizer, criterion, device)
         val_metrics, _, _ = evaluate(model, val_loader, device)
         val_ap = val_metrics['AP']
