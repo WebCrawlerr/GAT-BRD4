@@ -81,6 +81,7 @@ def main():
     parser.add_argument('--processed_dir', type=str, default=DATA_PROCESSED_DIR)
     parser.add_argument('--raw_file', type=str, default=r'data/raw/leash-BELKA/train.csv')
     parser.add_argument('--target', type=str, default='BRD4', help='Target protein name (BRD4, HSA, sEH)')
+    parser.add_argument('--filtered_file', type=str, default=None, help='Path to pre-filtered CSV')
     parser.add_argument('--experiment', type=str, choices=['learning_curve'], default='learning_curve')
     args = parser.parse_args()
     
@@ -91,14 +92,17 @@ def main():
     os.makedirs(args.processed_dir, exist_ok=True)
     
     # Initialize Dataset with fallback to raw file logic
-    # This logic matches main.py now
     
     target_csv = None
-    # Check for legacy filtered file (optional fallback)
-    filtered_csv_path = os.path.join(args.processed_dir, f'leash_{args.target.lower()}_filtered.csv')
-    if os.path.exists(filtered_csv_path):
-        target_csv = filtered_csv_path
-        print(f"Using found filtered file: {target_csv}")
+    if args.filtered_file and os.path.exists(args.filtered_file):
+        target_csv = args.filtered_file
+        print(f"Using provided filtered file: {target_csv}")
+    else:
+        # Check for legacy filtered file (optional fallback)
+        filtered_csv_path = os.path.join(args.processed_dir, f'leash_{args.target.lower()}_filtered.csv')
+        if os.path.exists(filtered_csv_path):
+            target_csv = filtered_csv_path
+            print(f"Using found filtered file: {target_csv}")
     
     print(f"Initializing Graph Dataset in {args.processed_dir}...")
     try:

@@ -16,6 +16,9 @@ def main():
     parser.add_argument('--output_dir', type=str, default=os.path.join(PLOTS_DIR, 'evaluation'), help='Directory to save plots')
     parser.add_argument('--limit', type=int, default=None, help='Limit dataset size for quick testing')
     
+    parser.add_argument('--raw_file', type=str, default=r'data/raw/leash-BELKA/train.csv', help='Path to raw CSV')
+    parser.add_argument('--target', type=str, default='BRD4', help='Target protein name')
+    
     args = parser.parse_args()
     
     # Setup
@@ -26,7 +29,13 @@ def main():
     
     # 1. Load Dataset
     print(f"Loading dataset from {args.data_dir}...")
-    dataset = BRD4Dataset(root=args.data_dir, filtered_file=args.filtered_file, limit=args.limit)
+    dataset = BRD4Dataset(
+        root=args.data_dir, 
+        raw_file=args.raw_file,
+        filtered_file=args.filtered_file, 
+        limit=args.limit,
+        target_name=args.target
+    )
     
     # 2. Split (use consistent split)
     # We evaluate on the TEST set
