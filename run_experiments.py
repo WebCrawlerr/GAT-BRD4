@@ -80,6 +80,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run Experiments")
     parser.add_argument('--processed_dir', type=str, default=DATA_PROCESSED_DIR)
     parser.add_argument('--raw_file', type=str, default=r'data/raw/leash-BELKA/train.csv')
+    parser.add_argument('--target', type=str, default='BRD4', help='Target protein name (BRD4, HSA, sEH)')
     parser.add_argument('--experiment', type=str, choices=['learning_curve'], default='learning_curve')
     args = parser.parse_args()
     
@@ -89,63 +90,28 @@ def main():
     # Ensure processed directory exists
     os.makedirs(args.processed_dir, exist_ok=True)
     
-    if os.path.exists(processed_path):
-        print(f"Found processed data at {processed_path}. Loading...")
-        # We need to manually set the processed path if it's non-standard, but BRD4Dataset expects 'data.pt' by default.
-        # To avoid hacking BRD4Dataset too much, we will just instantiate it.
-        # However, BRD4Dataset hardcodes 'data.pt'.
-        # Let's rename 'data.pt' to 'data_old_bindingdb.pt' if it exists and we want to enforce new data?
-        # A clearer way:
-        if os.path.exists(os.path.join(args.processed_dir, 'data.pt')):
-            print("WARNING: 'data.pt' exists. Assuming it is valid or the user handles conflicts.")
-        
-        dataset = BRD4Dataset(root=args.processed_dir)
-    else:
-        print("Processed data not found. Checking for cached filtered CSV from Leash...")
-        
-        # Check for cached CSV
-        filtered_csv_path = os.path.join(args.processed_dir, 'leash_brd4_filtered.csv')
-        
-        if not os.path.exists(filtered_csv_path):
-             print(f"Cached filtered file {filtered_csv_path} not found.")
-             if not os.path.exists(args.raw_file):
-                print(f"ERROR: Raw data file not found at {args.raw_file}")
-                return
-
-             # Two-step preparation
-             intermediate_file = os.path.join(args.processed_dir, '..', 'intermediate', 'brd4_all.csv')
-             
-             # 1. Filter
-             print("Step 1: Filtering Leash BELKA data for BRD4...")
-             from filter_protein import filter_protein_records
-             success = filter_protein_records(args.raw_file, intermediate_file, 'BRD4')
-             if not success:
-                 print("Filtering failed.")
-                 return
-                 
-             # 2. Prepare (Shuffle/Format)
-             print("Step 2: Preparing final dataset (Removing downsampling)...")
-             from prepare_leash_data import prepare_training_data
-             prepare_training_data(intermediate_file, filtered_csv_path, seed=42, chunk_size=1000000)
-
-        if os.path.exists(filtered_csv_path):
-            print(f"Loading cached filtered data from {filtered_csv_path}...")
-            df = pd.read_csv(filtered_csv_path)
-            print(f"Loaded {len(df)} records.")
-            
-            # Columns should already be renamed by prepare_leash_data, but check just in case
-            if 'molecule_smiles' in df.columns:
-                df.rename(columns={'molecule_smiles': 'Ligand SMILES'}, inplace=True)
-            if 'binds' in df.columns:
-                df.rename(columns={'binds': 'Label'}, inplace=True)
-                
-            print(f"Columns verified: {df.columns.tolist()}")
-
-            print(f"Creating Graph Dataset in {args.processed_dir}...")
-            dataset = BRD4Dataset(root=args.processed_dir, df=df)
-        else:
-            print("Error: Failed to produce filtered CSV.")
-            return
+    # Initialize Dataset with fallback to raw file logic
+    # This logic matches main.py now
+    
+    target_csv = None
+    # Check for legacy filtered file (optional fallback)
+    filtered_csv_path = os.path.join(args.processed_dir, f'leash_{args.target.lower()}_filtered.csv')
+    if os.path.exists(filtered_csv_path):
+        target_csv = filtered_csv_path
+        print(f"Using found filtered file: {target_csv}")
+    
+    print(f"Initializing Graph Dataset in {args.processed_dir}...")
+    try:
+        dataset = BRD4Dataset(
+            root=args.processed_dir, 
+            raw_file=args.raw_file, 
+            filtered_file=target_csv, 
+            target_name=args.target
+        )
+    except FileNotFoundError as e:
+        print(f"Dataset initialization failed: {e}")
+        print("Please provide a valid --raw_file or ensure processed data exists.")
+        return
             
     if args.experiment == 'learning_curve':
         run_learning_curve(dataset)
