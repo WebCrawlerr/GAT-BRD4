@@ -16,7 +16,8 @@ class BRD4Dataset(Dataset):
     Implements on-the-fly graph generation and balanced sampling to handle 
     large datasets (98M+) within Kaggle constraints.
     """
-    def __init__(self, root, filtered_file=None, limit=None, target_name='BRD4', test_mode=False, transform=None, pre_transform=None):
+    def __init__(self, root, raw_file=None, filtered_file=None, limit=None, target_name='BRD4', test_mode=False, transform=None, pre_transform=None):
+        self.raw_file = raw_file
         self.filtered_file = filtered_file
         self.limit = limit
         self.target_name = target_name
@@ -53,16 +54,19 @@ class BRD4Dataset(Dataset):
         pass
 
     def process(self):
-        if self.filtered_file is None:
-            raise FileNotFoundError("Processed data not found and no 'filtered_file' provided.")
+        if self.filtered_file is None and self.raw_file is None:
+            raise FileNotFoundError("Processed data not found and neither 'filtered_file' nor 'raw_file' provided.")
 
-        print(f"Sampling from {self.filtered_file} using Polars (Test Mode={self.test_mode})...")
+        input_file = self.filtered_file if self.filtered_file else self.raw_file
+        is_raw = self.filtered_file is None
+        
+        print(f"Sampling from {input_file} using Polars (Test Mode={self.test_mode})...")
         
         # Determine strict counts based on 1:3 ratio and limit behavior
         
         # Detect column names lazily
         # Use simple read to get schema is fast enough
-        schema = pl.scan_csv(self.filtered_file).collect_schema()
+        schema = pl.scan_csv(input_file).collect_schema()
         
         rename_map = {}
         if 'molecule_smiles' in schema.names():
@@ -74,7 +78,16 @@ class BRD4Dataset(Dataset):
                 rename_map['binds'] = 'Label'
             
         # Scan dataset
-        q = pl.scan_csv(self.filtered_file)
+        q = pl.scan_csv(input_file)
+        
+        # Filter by protein if using raw file
+        if is_raw and not self.test_mode:
+             if 'protein_name' in schema.names():
+                 print(f"Filtering for protein: {self.target_name}")
+                 q = q.filter(pl.col('protein_name') == self.target_name)
+             else:
+                 print("Warning: 'protein_name' column not found in raw file. Assuming pre-filtered or single-target file.")
+
         if rename_map:
             q = q.rename(rename_map)
 

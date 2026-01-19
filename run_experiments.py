@@ -45,8 +45,9 @@ def run_learning_curve(dataset, fractions=[0.2, 0.4, 0.6, 0.8, 1.0]):
         # Create subset
         train_subset = train_dataset_full[:subset_size]
         
-        # Run training (suppress plotting for speed)
-        metrics = run_training(train_subset, val_dataset, test_dataset=None, plot=False, verbose=False)
+        # Run training (plot only for the last fraction to generate confusion matrix, etc.)
+        is_last = (frac == fractions[-1])
+        metrics = run_training(train_subset, val_dataset, test_dataset=None, plot=is_last, verbose=False)
         
         results['Fraction'].append(frac)
         results['Train_Size'].append(subset_size)

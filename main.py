@@ -68,7 +68,13 @@ def main():
     
     print(f"Initializing Graph Dataset in {processed_dir}...")
     try:
-        dataset = BRD4Dataset(root=processed_dir, filtered_file=target_csv, limit=args.limit, target_name=args.target)
+        dataset = BRD4Dataset(
+            root=processed_dir, 
+            raw_file=raw_path, 
+            filtered_file=target_csv, 
+            limit=args.limit, 
+            target_name=args.target
+        )
     except FileNotFoundError as e:
         # Fallback to generation if not found (legacy path)
         print(f"Dataset not ready: {e}")
