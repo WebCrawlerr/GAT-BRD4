@@ -15,7 +15,6 @@ def main():
     parser.add_argument('--filtered_file', type=str, default=None, help='Specific CSV file to load if data.pt is missing')
     parser.add_argument('--output_dir', type=str, default=os.path.join(PLOTS_DIR, 'evaluation'), help='Directory to save plots')
     parser.add_argument('--limit', type=int, default=None, help='Limit dataset size for quick testing')
-    
     parser.add_argument('--raw_file', type=str, default=r'data/raw/leash-BELKA/train.csv', help='Path to raw CSV')
     parser.add_argument('--target', type=str, default='BRD4', help='Target protein name')
     

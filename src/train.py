@@ -169,11 +169,12 @@ def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fol
             detailed_name = f"{save_prefix}{target_name}_gat_h{hidden_dim}_ep{epoch:02d}_ap{val_ap:.4f}.pth"
             torch.save(model.state_dict(), os.path.join(MODEL_SAVE_DIR, detailed_name))
             
-            # 2. Save Generic 'Best' Version (operational convenience)
-            # This allows inference.py to work without changing arguments every time
-            torch.save(model.state_dict(), os.path.join(MODEL_SAVE_DIR, f"{target_name}_best_model.pth"))
+            # 2. Save Operational 'Best' Model
+            # We use a consistent name for loading back, including save_prefix for CV support
+            best_model_name = f"{save_prefix}{target_name}_best_model.pth"
+            torch.save(model.state_dict(), os.path.join(MODEL_SAVE_DIR, best_model_name))
             
-            print(f" -> New Best Model Saved! ({detailed_name} & best_model.pth)")
+            print(f" -> New Best Model Saved! ({best_model_name})")
             model_saved = True
         else:
             patience_counter += 1
@@ -198,8 +199,9 @@ def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fol
             
     # Final Evaluation
     if model_saved:
-        print(f"Loading best model for final evaluation ({model_save_name})...")
-        model.load_state_dict(torch.load(os.path.join(MODEL_SAVE_DIR, model_save_name)))
+        best_model_name = f"{save_prefix}{target_name}_best_model.pth"
+        print(f"Loading best model for final evaluation ({best_model_name})...")
+        model.load_state_dict(torch.load(os.path.join(MODEL_SAVE_DIR, best_model_name)))
     else:
         print("Warning: No best model was saved (did not improve). Using final model state.")
     
