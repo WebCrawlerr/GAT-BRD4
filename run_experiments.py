@@ -82,6 +82,7 @@ def main():
     parser.add_argument('--raw_file', type=str, default=r'data/raw/leash-BELKA/train.csv')
     parser.add_argument('--target', type=str, default='BRD4', help='Target protein name (BRD4, HSA, sEH)')
     parser.add_argument('--filtered_file', type=str, default=None, help='Path to pre-filtered CSV')
+    parser.add_argument('--limit', type=int, default=None, help='Limit dataset size')
     parser.add_argument('--experiment', type=str, choices=['learning_curve'], default='learning_curve')
     args = parser.parse_args()
     
@@ -110,6 +111,7 @@ def main():
             root=args.processed_dir, 
             raw_file=args.raw_file, 
             filtered_file=target_csv, 
+            limit=args.limit,
             target_name=args.target
         )
     except FileNotFoundError as e:
