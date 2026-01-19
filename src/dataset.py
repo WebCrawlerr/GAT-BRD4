@@ -93,7 +93,13 @@ class BRD4Dataset(Dataset):
 
         # --- TEST MODE ---
         if self.test_mode:
-            print("Processing test data (preserving all rows, ignoring labels)...")
+            print(f"Processing test data for target {self.target_name}...")
+            
+            # Filter by protein name if column exists
+            if 'protein_name' in schema.names():
+                print(f"Filtering test data for protein: {self.target_name}")
+                q = q.filter(pl.col('protein_name') == self.target_name)
+            
             # In test mode, we just take everything
             if self.limit:
                 q = q.limit(self.limit)
