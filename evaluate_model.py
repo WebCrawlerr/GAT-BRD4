@@ -37,15 +37,22 @@ def main():
     )
     
     # 2. Split (use consistent split)
-    # We evaluate on the TEST set
-    _, _, test_dataset = building_block_split(dataset, seed=SEED)
+    # 2. Split (use consistent split)
+    # We evaluate on the TEST set (or Validation if Test is empty/0%)
+    _, val_dataset, test_dataset = building_block_split(dataset, seed=SEED)
     
+    usage_set_name = "Test"
     if len(test_dataset) == 0:
-        print("Error: Test dataset is empty.")
+        print("Warning: Test dataset is empty (split=0.0). Using Validation set for evaluation.")
+        test_dataset = val_dataset
+        usage_set_name = "Validation"
+        
+    if len(test_dataset) == 0:
+        print("Error: Validation dataset is also empty.")
         return
 
     test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
-    print(f"Test Set Size: {len(test_dataset)}")
+    print(f"{usage_set_name} Set Size: {len(test_dataset)}")
     
     # 3. Load Model
     print(f"Loading model from {args.model_path}...")
