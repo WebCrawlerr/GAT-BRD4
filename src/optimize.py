@@ -1,6 +1,6 @@
 import optuna
 import torch
-from src.dataset import scaffold_split
+from src.dataset import building_block_split
 from src.train import run_training
 from src.config import *
 
@@ -14,10 +14,9 @@ def objective(trial, dataset):
         'lr': trial.suggest_float('lr', 1e-4, 1e-2, log=True)
     }
     
-    # Split data (Single split for speed during optimization)
-    # Note: Ideally we should use CV here too, but it might be too slow.
-    # We will use a fixed scaffold split for consistency across trials.
-    train_dataset, val_dataset, _ = scaffold_split(dataset)
+    # Split data (Building Block split for valid generalization metric)
+    # This aligns the optimization objective with the competition goal.
+    train_dataset, val_dataset, _ = building_block_split(dataset)
     
     # Run training
     # We suppress plotting and use the trial config
