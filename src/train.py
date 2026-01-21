@@ -141,7 +141,18 @@ def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fol
     history = []
     model_saved = False
 
+    # Time Safety
+    import time
+    start_time = time.time()
+    MAX_TIME_SECONDS = 11.8 * 3600 # 11.5 hours safety margin for 12h limit
+
     for epoch in range(1, epochs + 1):
+        # Time Check
+        elapsed = time.time() - start_time
+        if elapsed > MAX_TIME_SECONDS:
+            print(f"⚠️ SAFETY STOP: Approaching time limit ({elapsed/3600:.1f}h). Stopping training to save results.")
+            break
+
         loss = train_epoch(model, train_loader, optimizer, criterion, device)
         val_metrics, _, _ = evaluate(model, val_loader, device)
         val_ap = val_metrics['AP']
@@ -213,7 +224,6 @@ def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fol
     test_metrics, y_true_test, y_pred_test = evaluate(model, eval_loader, device)
     print(f"{eval_name} Metrics: {test_metrics}")
     
-    # Plots
     # Plots
     if plot:
         # Create plot directory for this run
