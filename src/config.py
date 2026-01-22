@@ -20,18 +20,20 @@ TARGET_NAMES = ["BRD4", "Bromodomain-containing protein 4"]
 
 # Model Hyperparameters
 GAT_HEADS = 8
-GAT_HIDDEN_DIM = 32
+GAT_HIDDEN_DIM = 64
 GAT_LAYERS = 3
 DROPOUT = 0.11
-LEARNING_RATE = 0.0005
+LEARNING_RATE = 0.0001
 WEIGHT_DECAY = 5e-4
-EPOCHS = 50
-BATCH_SIZE = 128
-PATIENCE = 10 # Early stopping
+EPOCHS = 35
+BATCH_SIZE = 4096
+PATIENCE = 4 # Early stopping
 
 # Focal Loss Support
-FOCAL_GAMMA = 2.0
+FOCAL_GAMMA = 1.0
 FOCAL_ALPHA = 0.25 # Optional default, can be calculated dynamically
 
 # Random Seed
 SEED = 42
+
+
