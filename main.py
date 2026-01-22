@@ -55,9 +55,16 @@ def main():
     # We pass the filtered_file path if provided.
     
     target_csv = None
-    if args.filtered_file and os.path.exists(args.filtered_file):
-        print(f"Using provided filtered file: {args.filtered_file}")
-        target_csv = args.filtered_file
+    target_csv = None
+    if args.filtered_file:
+        if os.path.exists(args.filtered_file):
+            print(f"Using provided filtered file: {args.filtered_file}")
+            target_csv = args.filtered_file
+        else:
+            print(f"❌ ERROR: The provided file '{args.filtered_file}' does not exist.")
+            print("   -> Please verify the path using '!ls /path/to/directory' in a separate cell.")
+            return
+
     elif os.path.exists(os.path.join(processed_dir, f'leash_{args.target.lower()}_filtered.csv')):
         target_csv = os.path.join(processed_dir, f'leash_{args.target.lower()}_filtered.csv')
         print(f"Using default filtered file: {target_csv}")
