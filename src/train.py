@@ -31,20 +31,27 @@ def train_epoch(model, loader, optimizer, criterion, device):
     return total_loss / len(loader.dataset)
 
 @torch.no_grad()
-def evaluate(model, loader, device):
+def evaluate(model, loader, device, criterion=None):
     model.eval()
     y_true = []
     y_pred_logits = []
+    total_loss = 0
     
     for data in loader:
         data = data.to(device)
         out = model(data)
         
+        if criterion:
+            loss = criterion(out.view(-1), data.y.view(-1))
+            total_loss += loss.item() * data.num_graphs
+        
         y_true.extend(data.y.cpu().numpy())
         y_pred_logits.extend(out.view(-1).cpu().numpy())
         
     metrics = calculate_metrics(np.array(y_true), np.array(y_pred_logits))
-    return metrics, np.array(y_true), np.array(y_pred_logits)
+    avg_loss = total_loss / len(loader.dataset) if criterion else None
+    
+    return metrics, avg_loss, np.array(y_true), np.array(y_pred_logits)
 
 def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fold_idx=None, target_name='BRD4', plot=True, verbose=True):
     # Config overrides
@@ -158,7 +165,7 @@ def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fol
             break
 
         loss = train_epoch(model, train_loader, optimizer, criterion, device)
-        val_metrics, _, _ = evaluate(model, val_loader, device)
+        val_metrics, val_loss, _, _ = evaluate(model, val_loader, device, criterion)
         val_ap = val_metrics['AP']
         
         train_losses.append(loss)
@@ -168,13 +175,14 @@ def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fol
         history.append({
             'Epoch': epoch,
             'Train_Loss': loss,
+            'Val_Loss': val_loss,
             'Val_AP': val_metrics['AP'],
             'Val_AUC': val_metrics['AUC'],
             'Val_F1': val_metrics['F1']
         })
         
         if verbose:
-            print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Val AP: {val_ap:.4f}, Val AUC: {val_metrics["AUC"]:.4f}')
+            print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Val Loss: {val_loss:.4f}, Val AP: {val_ap:.4f}, Val AUC: {val_metrics["AUC"]:.4f}')
         
         # Early Stopping
         if val_ap > best_val_ap:
@@ -225,7 +233,7 @@ def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fol
     eval_loader = test_loader if test_loader else val_loader
     eval_name = "Test" if test_loader else "Validation"
     
-    test_metrics, y_true_test, y_pred_test = evaluate(model, eval_loader, device)
+    test_metrics, _, y_true_test, y_pred_test = evaluate(model, eval_loader, device)
     print(f"{eval_name} Metrics: {test_metrics}")
     
     # Plots

@@ -19,6 +19,7 @@ def main():
     parser.add_argument('--target', type=str, default='BRD4', help='Target protein name')
     parser.add_argument('--heads', type=int, default=GAT_HEADS, help='Number of attention heads')
     parser.add_argument('--hidden_dim', type=int, default=GAT_HIDDEN_DIM, help='Hidden dimension size')
+    parser.add_argument('--log_path', type=str, default=None, help='Path to training_log.csv to plot history')
     
     args = parser.parse_args()
     
@@ -28,6 +29,36 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
     
+    # Optional: Plot History first if log provided
+    if args.log_path and os.path.exists(args.log_path):
+        import pandas as pd
+        from src.utils import plot_loss_curve, plot_val_ap_curve
+        
+        print(f"Found log file at {args.log_path}. Generating history plots...")
+        try:
+            df_log = pd.read_csv(args.log_path)
+            if 'Train_Loss' in df_log.columns:
+                plot_loss_curve(df_log['Train_Loss'].tolist(), os.path.join(args.output_dir, 'loss_curve_recovered.png'))
+            if 'Val_AP' in df_log.columns:
+                plot_val_ap_curve(df_log['Val_AP'].tolist(), os.path.join(args.output_dir, 'val_ap_curve_recovered.png'))
+            # Also plot Val Loss if available (new feature)
+            if 'Val_Loss' in df_log.columns:
+                # We can reuse plot_loss_curve but title might be wrong, or just plot it manually here or add a specific function.
+                # For now let's just use plot_loss_curve logic but custom
+                import matplotlib.pyplot as plt
+                plt.figure(figsize=(6, 5))
+                plt.plot(df_log['Val_Loss'], label='Val Loss', color='orange')
+                plt.xlabel('Epoch')
+                plt.ylabel('Loss')
+                plt.title('Validation Loss')
+                plt.legend()
+                plt.savefig(os.path.join(args.output_dir, 'val_loss_curve_recovered.png'))
+                plt.close()
+                
+            print("History plots generated.")
+        except Exception as e:
+            print(f"Error generating history plots: {e}")
+            
     # 1. Load Dataset
     print(f"Loading dataset from {args.data_dir}...")
     dataset = BRD4Dataset(
@@ -76,7 +107,7 @@ def main():
 
     # 4. Evaluate
     print("Running evaluation...")
-    metrics, y_true, y_pred_logits = evaluate(model, test_loader, device)
+    metrics, _, y_true, y_pred_logits = evaluate(model, test_loader, device)
     print(f"Metrics: {metrics}")
     
     # 5. Plot
