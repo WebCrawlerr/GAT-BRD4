@@ -138,9 +138,9 @@ class BRD4Dataset(Dataset):
         
         if self.limit:
             if self.limit < n_pos_target:
-                print(f"Warning: Limit ({self.limit}) is smaller than total positives ({total_pos}). Clipping positives.")
-                n_pos_target = self.limit
-                n_neg_target = 0
+                print(f"Warning: Limit ({self.limit}) is smaller than total positives ({total_pos}). enforcing balanced subset.")
+                n_pos_target = self.limit // 2
+                n_neg_target = self.limit - n_pos_target
             else:
                 # We have space. Fill remaining space with negatives up to the limit
                 # User preference: Maximize data usage rather than strict 1:3 ratio

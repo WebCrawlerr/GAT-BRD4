@@ -65,6 +65,7 @@ def run_learning_curve(dataset, epochs=None, fractions=[0.2, 0.4, 0.6, 0.8, 1.0]
         df_results.to_csv(save_path, index=False)
         print(f"  [Progress Saved] to {save_path}")
         
+    
     # Final Plotting
     print(f"\nResults saved to {save_path}")
     plt.figure(figsize=(10, 6))
@@ -79,6 +80,70 @@ def run_learning_curve(dataset, epochs=None, fractions=[0.2, 0.4, 0.6, 0.8, 1.0]
     plt.savefig(os.path.join(PLOTS_DIR, 'learning_curve.png'))
     print("Plot saved to plots/learning_curve.png")
 
+def run_hyperparam_scan(dataset, epochs=None):
+    print("\n=== Running Hyperparameter Scan ===")
+    
+    # Grid Search Space
+    heads_list = [1, 4, 8]
+    hidden_dims_list = [64, 128]
+    
+    # Fixed split
+    train_dataset, val_dataset, test_dataset = building_block_split(
+        dataset, frac_train=0.8, frac_val=0.1, frac_test=0.1, seed=42
+    )
+
+    results = []
+    
+    save_path = os.path.join(PLOTS_DIR, 'hyperparam_scan_results.csv')
+    os.makedirs(PLOTS_DIR, exist_ok=True)
+    
+    total_runs = len(heads_list) * len(hidden_dims_list)
+    current_run = 0
+    
+    for heads in heads_list:
+        for hidden_dim in hidden_dims_list:
+            current_run += 1
+            print(f"\n--- Run {current_run}/{total_runs}: Heads={heads}, Hidden={hidden_dim} ---")
+            
+            config_override = {
+                'heads': heads,
+                'hidden_dim': hidden_dim,
+                'epochs': epochs
+            }
+            
+            # Run training (no plot for individual runs to save time/space, or maybe plot is fine)
+            metrics = run_training(train_dataset, val_dataset, config=config_override, plot=False, verbose=True)
+            
+            res = {
+                'Heads': heads,
+                'Hidden_Dim': hidden_dim,
+                'Val_AP': metrics['AP'],
+                'Val_AUC': metrics['AUC'],
+                'Val_F1': metrics.get('F1', 0)
+            }
+            results.append(res)
+            print(f"  -> Result: AP={metrics['AP']:.4f}")
+            
+            # Save incrementally
+            pd.DataFrame(results).to_csv(save_path, index=False)
+
+    print(f"\nScan Complete. Results saved to {save_path}")
+    
+    # Plotting Heatmap if possible or Bar chart
+    df = pd.DataFrame(results)
+    
+    # Combined Bar Plot
+    plt.figure(figsize=(10, 6))
+    x_labels = [f"H{r['Heads']}_D{r['Hidden_Dim']}" for r in results]
+    plt.bar(x_labels, df['Val_AP'])
+    plt.xlabel('Configuration (Heads_Dim)')
+    plt.ylabel('Validation AP')
+    plt.title('Hyperparameter Impact (AP)')
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig(os.path.join(PLOTS_DIR, 'hyperparam_impact.png'))
+    print("Plot saved to plots/hyperparam_impact.png")
+
 def main():
     parser = argparse.ArgumentParser(description="Run Experiments")
     parser.add_argument('--processed_dir', type=str, default=DATA_PROCESSED_DIR)
@@ -87,7 +152,7 @@ def main():
     parser.add_argument('--filtered_file', type=str, default=None, help='Path to pre-filtered CSV')
     parser.add_argument('--limit', type=int, default=None, help='Limit dataset size')
     parser.add_argument('--epochs', type=int, default=None, help='Override number of epochs')
-    parser.add_argument('--experiment', type=str, choices=['learning_curve'], default='learning_curve')
+    parser.add_argument('--experiment', type=str, choices=['learning_curve', 'hyperparam_scan'], default='learning_curve')
     args = parser.parse_args()
     
     print("Loading Dataset...")
@@ -109,7 +174,7 @@ def main():
             target_csv = filtered_csv_path
             print(f"Using found filtered file: {target_csv}")
     
-    print(f"Initializing Graph Dataset in {args.processed_dir}...")
+    print(f"Initializing Graph Dataset in {args.processed_dir} with limit={args.limit}...")
     try:
         dataset = BRD4Dataset(
             root=args.processed_dir, 
@@ -125,6 +190,8 @@ def main():
             
     if args.experiment == 'learning_curve':
         run_learning_curve(dataset, epochs=args.epochs)
+    elif args.experiment == 'hyperparam_scan':
+        run_hyperparam_scan(dataset, epochs=args.epochs)
 
 if __name__ == "__main__":
     main()

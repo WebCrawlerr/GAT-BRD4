@@ -17,6 +17,8 @@ def main():
     parser.add_argument('--limit', type=int, default=None, help='Limit dataset size for quick testing')
     parser.add_argument('--raw_file', type=str, default=r'data/raw/leash-BELKA/train.csv', help='Path to raw CSV')
     parser.add_argument('--target', type=str, default='BRD4', help='Target protein name')
+    parser.add_argument('--heads', type=int, default=GAT_HEADS, help='Number of attention heads')
+    parser.add_argument('--hidden_dim', type=int, default=GAT_HIDDEN_DIM, help='Hidden dimension size')
     
     args = parser.parse_args()
     
@@ -36,7 +38,6 @@ def main():
         target_name=args.target
     )
     
-    # 2. Split (use consistent split)
     # 2. Split (use consistent split)
     # We evaluate on the TEST set (or Validation if Test is empty/0%)
     _, val_dataset, test_dataset = building_block_split(dataset, seed=SEED)
@@ -64,7 +65,7 @@ def main():
     num_edge_features = dataset[0].edge_attr.shape[1]
     
     model = GATModel(num_node_features, num_edge_features, 
-                     hidden_dim=GAT_HIDDEN_DIM, heads=GAT_HEADS, 
+                     hidden_dim=args.hidden_dim, heads=args.heads, 
                      num_layers=GAT_LAYERS, dropout=DROPOUT).to(device)
                      
     try:

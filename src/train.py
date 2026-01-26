@@ -20,6 +20,10 @@ def train_epoch(model, loader, optimizer, criterion, device):
         loss = criterion(out.view(-1), data.y.view(-1))
         
         loss.backward()
+        
+        # Gradient Clipping (Prevent exploding gradients)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        
         optimizer.step()
         
         total_loss += loss.item() * data.num_graphs
@@ -144,7 +148,7 @@ def run_training(train_dataset, val_dataset, test_dataset=None, config=None, fol
     # Time Safety
     import time
     start_time = time.time()
-    MAX_TIME_SECONDS = 11.8 * 3600 # 11.5 hours safety margin for 12h limit
+    MAX_TIME_SECONDS = 11.6 * 3600 # 11.5 hours safety margin for 12h limit
 
     for epoch in range(1, epochs + 1):
         # Time Check
