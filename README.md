@@ -36,7 +36,7 @@ python main.py --raw_file data/raw/leash-BELKA/train.csv
 ```
 Example of Kaggle run after cloning the repository:
 ```bash
-!python main.py --raw_file /kaggle/input/gat-inz/leash_brd4_filtered.csv --processed_dir . --limit 2500000 --cv 0
+!python main.py --raw_file /kaggle/input/gat-inz/train.csv --processed_dir . --limit 1800000 --cv 0
 ```
 
 **Options:**
